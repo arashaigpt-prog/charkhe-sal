@@ -124,6 +124,10 @@
   select{background:var(--bg2);border:1px solid var(--line);color:var(--text);padding:10px 10px;border-radius:10px;font-family:inherit;font-size:13.5px;}
   .del-x{color:var(--muted2);cursor:pointer;font-size:15px;margin-inline-start:6px;}
   .del-x:hover{color:var(--autumn);}
+  .is-past{opacity:.4;}
+  .is-today{box-shadow:0 0 0 2px var(--gold) inset;}
+  .today-tag{display:inline-block;background:var(--gold);color:#1a1206;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;margin-inline-start:6px;}
+  .past-tag{display:inline-block;color:var(--muted2);font-size:10px;font-weight:700;margin-inline-start:6px;}
 </style>
 </head>
 <body>
@@ -190,6 +194,35 @@ const SEASONS=[
 
 const today=new Date();
 const jToday=toJalaali(today.getFullYear(),today.getMonth()+1,today.getDate());
+
+function seasonIdxOfMonth(jm){ return Math.floor((jm-1)/3); }
+const TODAY_SEASON_IDX=seasonIdxOfMonth(jToday.jm);
+const TODAY_MONTH_ABS=jToday.jm-1; // 0-11
+function isSeasonPast(si){ return si<TODAY_SEASON_IDX; }
+function isSeasonToday(si){ return si===TODAY_SEASON_IDX; }
+function isMonthPast(monthAbsIdx){ return monthAbsIdx<TODAY_MONTH_ABS; }
+function isMonthToday(monthAbsIdx){ return monthAbsIdx===TODAY_MONTH_ABS; }
+function isWeekPast(monthAbsIdx,weekIdx){
+  if(monthAbsIdx<TODAY_MONTH_ABS) return true;
+  if(monthAbsIdx>TODAY_MONTH_ABS) return false;
+  return (weekIdx*7+7)<jToday.jd;
+}
+function isWeekCurrent(monthAbsIdx,weekIdx){
+  if(monthAbsIdx!==TODAY_MONTH_ABS) return false;
+  return jToday.jd>=weekIdx*7+1 && jToday.jd<=weekIdx*7+7;
+}
+function isDayPast(monthAbsIdx,weekIdx,dayIdx){
+  if(monthAbsIdx<TODAY_MONTH_ABS) return true;
+  if(monthAbsIdx>TODAY_MONTH_ABS) return false;
+  return (weekIdx*7+dayIdx+1)<jToday.jd;
+}
+function isDayToday(monthAbsIdx,weekIdx,dayIdx){
+  if(monthAbsIdx!==TODAY_MONTH_ABS) return false;
+  return (weekIdx*7+dayIdx+1)===jToday.jd;
+}
+function todayContextLine(){
+  return `امروز ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy} است. برنامه‌ریزی باید از همین امروز شروع بشه، نه از اول سال. برای هر بخشی (فصل/ماه/هفته/روز) که کاملاً قبل از امروز است، آرایهٔ items رو کاملاً خالی بگذار چون برنامه‌ریزی برای گذشته بی‌معناست؛ تمام تمرکز واقعی باید روی امروز و آینده باشد.`;
+}
 
 const QUADRANTS=[
   {key:'q1',label:'فوری و مهم',sub:'همین حالا انجام بده',color:'var(--autumn)'},
@@ -343,7 +376,8 @@ async function analyzeAndPlan(goal){
    {"season":"زمستان","theme":"کوتاه","items":[{"title":"..."}]}
  ]
 }
-حداکثر ۳ نقطه عطف سالانه (هرکدام حداکثر ۶ کلمه). برای هر فصل حداکثر ۲ آیتم (هرکدام حداکثر ۶ کلمه) و موضوع فصل حداکثر ۴ کلمه. کل خروجی باید خیلی مختصر باشد.`;
+حداکثر ۳ نقطه عطف سالانه (هرکدام حداکثر ۶ کلمه). برای هر فصل حداکثر ۲ آیتم (هرکدام حداکثر ۶ کلمه) و موضوع فصل حداکثر ۴ کلمه. کل خروجی باید خیلی مختصر باشد.
+${todayContextLine()}`;
   const user=`هدف: «${goal.title}»\nپاسخ‌های کاربر:\n${answersText(goal)}`;
   const out=await askClaude(sys,user);
   goal.feasibility={status:out.status,note:out.note,adjustedGoal:out.adjustedGoal||''};
@@ -360,7 +394,8 @@ async function generateMonthsFor(goal, seasonIdx){
 ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
 خروجی فقط JSON:
 {"months":[{"items":[{"title":"..."}]},{"items":[{"title":"..."}]},{"items":[{"title":"..."}]}]}
-حداکثر ۳ آیتم کوتاه (حداکثر ۸ کلمه) برای هر ماه، به ترتیب سه ماه فصل.`;
+حداکثر ۳ آیتم کوتاه (حداکثر ۸ کلمه) برای هر ماه، به ترتیب سه ماه فصل.
+${todayContextLine()}`;
   const user=`هدف: «${goal.title}»\nفصل: ${quarter.season} — موضوع: ${quarter.theme}\nآیتم‌های فصل:\n${quarter.items.map(i=>'- '+i.title).join('\n')}\nماه‌های این فصل: ${quarter.months.map(m=>m.name).join('، ')}`;
   const out=await askClaude(sys,user);
   (out.months||[]).forEach((mm,i)=>{
@@ -379,7 +414,8 @@ async function generateWeeksFor(goal, seasonIdx, monthIdx){
   const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک ماه خاص را بین ${weekCount} هفتهٔ آن ماه تقسیم کن.
 ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
 خروجی فقط JSON: {"weeks":[{"items":[{"title":"..."}]}, ...تعداد=${weekCount}]}
-حداکثر ۲ آیتم بسیار کوتاه (حداکثر ۸ کلمه) برای هر هفته.`;
+حداکثر ۲ آیتم بسیار کوتاه (حداکثر ۸ کلمه) برای هر هفته.
+${todayContextLine()}`;
   const user=`هدف: «${goal.title}»\nماه: ${month.name}\nآیتم‌های ماه:\n${month.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
   month.weeks=(out.weeks||[]).slice(0,weekCount).map((w,i)=>({label:'هفته '+(i+1),items:(w.items||[]).map(it=>({title:it.title,done:false})),days:[],daysGenerated:false}));
@@ -392,7 +428,8 @@ async function generateDaysFor(goal, seasonIdx, monthIdx, weekIdx){
   const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک هفتهٔ خاص را بین ۷ روز آن هفته (شنبه تا جمعه، به همین ترتیب) تقسیم کن تا یک برنامهٔ روزانهٔ عملی به‌دست بیاد. هر آیتم را طبق ماتریس آیزنهاور دسته‌بندی کن: q1 = فوری و مهم، q2 = مهم ولی غیرفوری، q3 = فوری ولی غیرمهم، q4 = نه فوری نه مهم.
 ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
 خروجی فقط JSON: {"days":[{"items":[{"title":"...","quadrant":"q1|q2|q3|q4"}]}, ...دقیقاً ۷ مورد به ترتیب شنبه تا جمعه]}
-حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه) برای هر روز؛ اگر روزی کاری لازم نیست آرایهٔ آیتم‌هایش خالی باشد.`;
+حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه) برای هر روز؛ اگر روزی کاری لازم نیست آرایهٔ آیتم‌هایش خالی باشد.
+${todayContextLine()}`;
   const user=`هدف: «${goal.title}»\n${week.label} — آیتم‌های هفته:\n${week.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
   week.days=(out.days||[]).slice(0,7).map((d,i)=>({name:DAY_NAMES[i],items:(d.items||[]).map(it=>({title:it.title,done:false,quadrant:it.quadrant||'q2'}))}));
@@ -547,10 +584,11 @@ function dashboardHTML(){
 
   const seasonCards=SEASONS.map((s,i)=>{
     const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[i].items));
+    const past=isSeasonPast(i), curr=isSeasonToday(i);
     return `
-    <div class="season-card" style="--sc:${s.color}" data-open-season="${i}">
+    <div class="season-card ${past?'is-past':''} ${curr?'is-today':''}" style="--sc:${s.color}" data-open-season="${i}">
       <div class="bar"></div>
-      <div class="name">${s.name}${badge}</div>
+      <div class="name">${s.name}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>
       <div class="months">${s.months.map(m=>MONTH_NAMES[m]).join(' · ')}</div>
     </div>`;
   }).join('');
@@ -573,6 +611,9 @@ function dashboardHTML(){
 
   return `<div class="card">
     <div class="wheel-box">${wheel}</div>
+    <div class="row" style="justify-content:center;margin-bottom:6px;">
+      <button class="btn primary small" id="btnGoToday">برو به امروز</button>
+    </div>
     <div class="season-grid">${seasonCards}</div>
   </div>
   ${milestonesHTML? `<div class="card"><h3>نقاط عطف سال${yearScoreBadge}</h3>${milestonesHTML}</div>`:''}
@@ -607,9 +648,10 @@ function quarterHTML(){
   const months=state.goals.length? state.goals[0].quarters[si].months.map((m,mi)=>{
     const ready=state.goals.every(g=>g.quarters[si].months[mi].generated);
     const badge=ready? scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].items)) : '';
+    const past=isMonthPast(m.idx), curr=isMonthToday(m.idx);
     return `
-    <div class="month-card" data-open-month="${mi}">
-      <div class="mname">${m.name}${badge}</div>
+    <div class="month-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-month="${mi}">
+      <div class="mname">${m.name}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>
       <div class="hint">مشاهده / ساخت برنامهٔ ماه</div>
     </div>`;
   }).join(''):'';
@@ -653,10 +695,12 @@ function monthHTML(){
       triggerWeekGen(si,mi);
     }else{
       const weekCount=state.goals[0].quarters[si].months[mi].weeks.length;
+      const monthAbs=state.goals[0].quarters[si].months[mi].idx;
       weeksHTML=`<h3 style="margin-top:20px;">هفته‌ها</h3><div class="week-grid">`+
         Array.from({length:weekCount}).map((_,wi)=>{
           const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].weeks[wi].items));
-          return `<div class="week-card" data-open-week="${wi}">هفته ${wi+1}${badge}</div>`;
+          const past=isWeekPast(monthAbs,wi), curr=isWeekCurrent(monthAbs,wi);
+          return `<div class="week-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-week="${wi}">هفته ${wi+1}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>`;
         }).join('')+`</div>`;
     }
   }
@@ -692,6 +736,9 @@ function dayEisenGridHTML(si,mi,wi,di){
     });
   });
   const score=scoreBadgeHTML([entries]);
+  const monthAbs=state.goals.length? state.goals[0].quarters[si].months[mi].idx : null;
+  const past=monthAbs!==null && isDayPast(monthAbs,wi,di);
+  const curr=monthAbs!==null && isDayToday(monthAbs,wi,di);
   const grid=QUADRANTS.map(q=>{
     const rows=entries.filter(e=>e.quadrant===q.key).map(e=>`
       <div class="item-row ${e.done?'done':''}">
@@ -705,8 +752,8 @@ function dayEisenGridHTML(si,mi,wi,di){
       ${rows || '<p class="hint">کاری نیست.</p>'}
     </div>`;
   }).join('');
-  return `<div class="goal-block">
-    <div class="gtitle">${DAY_NAMES[di]}${score}</div>
+  return `<div class="goal-block ${past?'is-past':''} ${curr?'is-today':''}">
+    <div class="gtitle">${DAY_NAMES[di]}${score}${curr?'<span class="today-tag">امروز</span>':''}</div>
     <div class="eisen-grid">${grid}</div>
     <div class="add-task-row">
       <input type="text" placeholder="کار جدید…" data-newtask-input data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">
@@ -860,6 +907,14 @@ function bindEvents(){
 
   if($('btnAddMoreGoals')){
     $('btnAddMoreGoals').onclick=()=>{ draftGoals=[]; view.mode='wizard-goals'; render(); };
+  }
+  if($('btnGoToday')){
+    $('btnGoToday').onclick=()=>{
+      view.seasonIdx=TODAY_SEASON_IDX;
+      view.monthIdx=TODAY_MONTH_ABS%3;
+      view.mode='month';
+      render();
+    };
   }
   document.querySelectorAll('[data-regen-goal]').forEach(el=>{
     el.onclick=async ()=>{
