@@ -111,6 +111,19 @@
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--gold);
     padding:10px 20px;border-radius:12px;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:50;}
   .stepper{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .score-badge{display:inline-block;background:color-mix(in srgb, var(--sc) 22%, transparent);color:var(--sc);
+    border:1px solid var(--sc);font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;margin-inline-start:8px;}
+  .eisen-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+  @media(max-width:480px){.eisen-grid{grid-template-columns:1fr;}}
+  .eisen-cell{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px;border-top:4px solid var(--qc);}
+  .eisen-cell .qh{font-size:12.5px;font-weight:800;color:var(--qc);margin-bottom:1px;}
+  .eisen-cell .qs{font-size:10.5px;color:var(--muted2);margin-bottom:8px;}
+  .eisen-cell .item-row{padding:6px 2px;}
+  .add-task-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;}
+  .add-task-row input[type=text]{flex:1;min-width:160px;margin-top:0;}
+  select{background:var(--bg2);border:1px solid var(--line);color:var(--text);padding:10px 10px;border-radius:10px;font-family:inherit;font-size:13.5px;}
+  .del-x{color:var(--muted2);cursor:pointer;font-size:15px;margin-inline-start:6px;}
+  .del-x:hover{color:var(--autumn);}
 </style>
 </head>
 <body>
@@ -178,12 +191,40 @@ const SEASONS=[
 const today=new Date();
 const jToday=toJalaali(today.getFullYear(),today.getMonth()+1,today.getDate());
 
+const QUADRANTS=[
+  {key:'q1',label:'فوری و مهم',sub:'همین حالا انجام بده',color:'var(--autumn)'},
+  {key:'q2',label:'مهم، غیرفوری',sub:'برنامه‌ریزی کن',color:'var(--spring)'},
+  {key:'q3',label:'فوری، غیرمهم',sub:'واگذار کن',color:'var(--summer)'},
+  {key:'q4',label:'نه فوری نه مهم',sub:'حذف یا بعداً',color:'var(--winter)'}
+];
+function quadInfo(k){ return QUADRANTS.find(q=>q.key===k) || QUADRANTS[1]; }
+
 /* ---------------- State ---------------- */
-let state={ year: jToday.jy, goals: [] };
+let state={ year: jToday.jy, goals: [], dailyExtras: {} };
 let view={ mode:'loading', wizardIdx:0, seasonIdx:null, monthIdx:null, weekIdx:null, editingGoalId:null };
 let saveTimer=null;
 
 function uid(){ return 'g'+Math.random().toString(36).slice(2,9); }
+function dayKey(si,mi,wi,di){ return si+'_'+mi+'_'+wi+'_'+di; }
+function getExtras(si,mi,wi,di){ return state.dailyExtras[dayKey(si,mi,wi,di)] || []; }
+function addExtra(si,mi,wi,di,title,quadrant){
+  const k=dayKey(si,mi,wi,di);
+  if(!state.dailyExtras[k]) state.dailyExtras[k]=[];
+  state.dailyExtras[k].push({id:uid(),title,quadrant,done:false});
+}
+
+function scoreOf(itemArrays){
+  let done=0,total=0;
+  itemArrays.forEach(arr=>{ (arr||[]).forEach(it=>{ total++; if(it.done) done++; }); });
+  if(total===0) return null;
+  return {done,total,pct:Math.round(done/total*100)};
+}
+function scoreBadgeHTML(itemArrays){
+  const s=scoreOf(itemArrays);
+  if(!s) return '';
+  const color = s.pct>=70? 'var(--spring)' : s.pct>=35? 'var(--summer)' : 'var(--autumn)';
+  return `<span class="score-badge" style="--sc:${color}">${s.pct}٪</span>`;
+}
 
 function emptyQuarters(){
   return SEASONS.map(s=>({
@@ -200,6 +241,7 @@ async function loadState(){
     const raw=localStorage.getItem('planner-state');
     if(raw){ state=JSON.parse(raw); }
   }catch(e){ /* no saved state yet */ }
+  if(!state.dailyExtras) state.dailyExtras={};
   view.mode = (state.goals.length===0) ? 'empty' : 'dashboard';
   render();
 }
@@ -239,7 +281,7 @@ function sanitizeJsonText(str){
    می‌سازی وصل می‌شه. آدرس Worker خودت رو اینجا جایگزین کن.
    راهنمای کامل ساخت Worker توی فایل «راهنمای-انتشار.md» هست.
 */
-const PROXY_URL = "https://charkhesal-proxy.arash-aigpt.workers.dev";
+const PROXY_URL = "https://YOUR-WORKER-NAME.YOUR-SUBDOMAIN.workers.dev";
 
 async function askClaude(system,user){
   const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
@@ -305,7 +347,7 @@ async function analyzeAndPlan(goal){
   const user=`هدف: «${goal.title}»\nپاسخ‌های کاربر:\n${answersText(goal)}`;
   const out=await askClaude(sys,user);
   goal.feasibility={status:out.status,note:out.note,adjustedGoal:out.adjustedGoal||''};
-  goal.yearMilestones=out.yearMilestones||[];
+  goal.yearMilestones=(out.yearMilestones||[]).map(m=>({title:m.title,done:false}));
   const q=emptyQuarters();
   (out.quarters||[]).forEach((qq,i)=>{ if(q[i]){ q[i].theme=qq.theme||''; q[i].items=(qq.items||[]).map(it=>({title:it.title,done:false})); q[i].generated=true; } });
   goal.quarters=q;
@@ -347,13 +389,13 @@ ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده تو
 
 async function generateDaysFor(goal, seasonIdx, monthIdx, weekIdx){
   const week=goal.quarters[seasonIdx].months[monthIdx].weeks[weekIdx];
-  const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک هفتهٔ خاص را بین ۷ روز آن هفته (شنبه تا جمعه، به همین ترتیب) تقسیم کن تا یک برنامهٔ روزانهٔ عملی به‌دست بیاد.
+  const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک هفتهٔ خاص را بین ۷ روز آن هفته (شنبه تا جمعه، به همین ترتیب) تقسیم کن تا یک برنامهٔ روزانهٔ عملی به‌دست بیاد. هر آیتم را طبق ماتریس آیزنهاور دسته‌بندی کن: q1 = فوری و مهم، q2 = مهم ولی غیرفوری، q3 = فوری ولی غیرمهم، q4 = نه فوری نه مهم.
 ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
-خروجی فقط JSON: {"days":[{"items":[{"title":"..."}]}, ...دقیقاً ۷ مورد به ترتیب شنبه تا جمعه]}
+خروجی فقط JSON: {"days":[{"items":[{"title":"...","quadrant":"q1|q2|q3|q4"}]}, ...دقیقاً ۷ مورد به ترتیب شنبه تا جمعه]}
 حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه) برای هر روز؛ اگر روزی کاری لازم نیست آرایهٔ آیتم‌هایش خالی باشد.`;
   const user=`هدف: «${goal.title}»\n${week.label} — آیتم‌های هفته:\n${week.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
-  week.days=(out.days||[]).slice(0,7).map((d,i)=>({name:DAY_NAMES[i],items:(d.items||[]).map(it=>({title:it.title,done:false}))}));
+  week.days=(out.days||[]).slice(0,7).map((d,i)=>({name:DAY_NAMES[i],items:(d.items||[]).map(it=>({title:it.title,done:false,quadrant:it.quadrant||'q2'}))}));
   while(week.days.length<7) week.days.push({name:DAY_NAMES[week.days.length],items:[]});
   week.daysGenerated=true;
 }
@@ -503,12 +545,15 @@ function dashboardHTML(){
   wheel+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" fill="var(--muted)" font-size="11" font-family="Vazirmatn">سال شمسی</text>`;
   wheel+=`</svg>`;
 
-  const seasonCards=SEASONS.map((s,i)=>`
+  const seasonCards=SEASONS.map((s,i)=>{
+    const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[i].items));
+    return `
     <div class="season-card" style="--sc:${s.color}" data-open-season="${i}">
       <div class="bar"></div>
-      <div class="name">${s.name}</div>
+      <div class="name">${s.name}${badge}</div>
       <div class="months">${s.months.map(m=>MONTH_NAMES[m]).join(' · ')}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   const goalsList=state.goals.map(g=>`
     <div class="goal-chip">
@@ -519,10 +564,18 @@ function dashboardHTML(){
       </span>
     </div>`).join('');
 
+  const yearScoreBadge=scoreBadgeHTML(state.goals.map(g=>g.yearMilestones||[]));
+  const milestonesHTML=state.goals.filter(g=>g.yearMilestones && g.yearMilestones.length).map(g=>`
+    <div class="goal-block">
+      <div class="gtitle">${g.title}</div>
+      ${g.yearMilestones.map((m,idx)=>`<div class="item-row ${m.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-year="1" data-idx="${idx}" ${m.done?'checked':''}><span class="t">◆ ${m.title}</span></div>`).join('')}
+    </div>`).join('');
+
   return `<div class="card">
     <div class="wheel-box">${wheel}</div>
     <div class="season-grid">${seasonCards}</div>
   </div>
+  ${milestonesHTML? `<div class="card"><h3>نقاط عطف سال${yearScoreBadge}</h3>${milestonesHTML}</div>`:''}
   <div class="card">
     <h3>هدف‌های این سال</h3>
     ${goalsList || '<p class="muted">هنوز هدفی ثبت نشده.</p>'}
@@ -551,11 +604,15 @@ function quarterHTML(){
     </div>`;
   }).join('');
 
-  const months=state.goals.length? state.goals[0].quarters[si].months.map((m,mi)=>`
+  const months=state.goals.length? state.goals[0].quarters[si].months.map((m,mi)=>{
+    const ready=state.goals.every(g=>g.quarters[si].months[mi].generated);
+    const badge=ready? scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].items)) : '';
+    return `
     <div class="month-card" data-open-month="${mi}">
-      <div class="mname">${m.name}</div>
+      <div class="mname">${m.name}${badge}</div>
       <div class="hint">مشاهده / ساخت برنامهٔ ماه</div>
-    </div>`).join(''):'';
+    </div>`;
+  }).join(''):'';
 
   return `${crumbs([{label:'سال',go:'dashboard'},{label:s.name}])}
   <div class="card">
@@ -597,7 +654,10 @@ function monthHTML(){
     }else{
       const weekCount=state.goals[0].quarters[si].months[mi].weeks.length;
       weeksHTML=`<h3 style="margin-top:20px;">هفته‌ها</h3><div class="week-grid">`+
-        Array.from({length:weekCount}).map((_,wi)=>`<div class="week-card" data-open-week="${wi}">هفته ${wi+1}</div>`).join('')+`</div>`;
+        Array.from({length:weekCount}).map((_,wi)=>{
+          const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].weeks[wi].items));
+          return `<div class="week-card" data-open-week="${wi}">هفته ${wi+1}${badge}</div>`;
+        }).join('')+`</div>`;
     }
   }
 
@@ -609,6 +669,52 @@ function monthHTML(){
     ${blocks}
     ${weeksHTML}
     ${updateBoxHTML({type:'month',si,mi})}
+  </div>`;
+}
+
+function dayEisenGridHTML(si,mi,wi,di){
+  const entries=[];
+  state.goals.forEach(g=>{
+    const day=g.quarters[si].months[mi].weeks[wi].days[di];
+    if(!day) return;
+    day.items.forEach((it,idx)=>{
+      entries.push({
+        title: it.title + (state.goals.length>1? ` — ${g.title}`:''),
+        done: it.done, quadrant: it.quadrant||'q2', removable:false,
+        attrs:`data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}" data-idx="${idx}"`
+      });
+    });
+  });
+  getExtras(si,mi,wi,di).forEach(ex=>{
+    entries.push({
+      title: ex.title, done: ex.done, quadrant: ex.quadrant||'q2', removable:true, extraId: ex.id,
+      attrs:`data-item-toggle data-extra="${ex.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}"`
+    });
+  });
+  const score=scoreBadgeHTML([entries]);
+  const grid=QUADRANTS.map(q=>{
+    const rows=entries.filter(e=>e.quadrant===q.key).map(e=>`
+      <div class="item-row ${e.done?'done':''}">
+        <input type="checkbox" ${e.attrs} ${e.done?'checked':''}>
+        <span class="t">${e.title}</span>
+        ${e.removable? `<span class="del-x" data-remove-extra="${e.extraId}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">×</span>`:''}
+      </div>`).join('');
+    return `<div class="eisen-cell" style="--qc:${q.color}">
+      <div class="qh">${q.label}</div>
+      <div class="qs">${q.sub}</div>
+      ${rows || '<p class="hint">کاری نیست.</p>'}
+    </div>`;
+  }).join('');
+  return `<div class="goal-block">
+    <div class="gtitle">${DAY_NAMES[di]}${score}</div>
+    <div class="eisen-grid">${grid}</div>
+    <div class="add-task-row">
+      <input type="text" placeholder="کار جدید…" data-newtask-input data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">
+      <select data-newtask-quad>
+        ${QUADRANTS.map(q=>`<option value="${q.key}">${q.label}</option>`).join('')}
+      </select>
+      <button class="btn ghost small" data-add-task data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">افزودن</button>
+    </div>
   </div>`;
 }
 
@@ -636,16 +742,7 @@ function weekHTML(){
       daysHTML=`<div class="loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ روزانه…</div>`;
       triggerDayGen(si,mi,wi);
     }else{
-      daysHTML=DAY_NAMES.map((dn,di)=>{
-        const rows=state.goals.map(g=>{
-          const dayItems=g.quarters[si].months[mi].weeks[wi].days[di].items;
-          return dayItems.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}${state.goals.length>1?` <span class="hint">— ${g.title}</span>`:''}</span></div>`).join('');
-        }).join('');
-        return `<div class="goal-block">
-          <div class="gtitle">${dn}</div>
-          ${rows || '<p class="hint">کاری برای این روز ثبت نشده.</p>'}
-        </div>`;
-      }).join('');
+      daysHTML=DAY_NAMES.map((dn,di)=>dayEisenGridHTML(si,mi,wi,di)).join('');
     }
   }
 
@@ -847,16 +944,48 @@ function bindEvents(){
 
   document.querySelectorAll('[data-item-toggle]').forEach(el=>{
     el.onchange=()=>{
-      const g=state.goals.find(x=>x.id===el.dataset.goal);
       const si=el.dataset.si, mi=el.dataset.mi, wi=el.dataset.wi, di=el.dataset.di, idx=+el.dataset.idx;
+      if(el.dataset.extra!==undefined && el.dataset.extra!==''){
+        const list=getExtras(si,mi,wi,di);
+        const ex=list.find(x=>x.id===el.dataset.extra);
+        if(ex) ex.done=el.checked;
+        persist();
+        const row=el.closest('.item-row'); row.classList.toggle('done',el.checked);
+        return;
+      }
+      const g=state.goals.find(x=>x.id===el.dataset.goal);
       let arr;
-      if(di!==undefined && di!=='') arr=g.quarters[si].months[mi].weeks[wi].days[di].items;
+      if(el.dataset.year!==undefined && el.dataset.year!=='') arr=g.yearMilestones;
+      else if(di!==undefined && di!=='') arr=g.quarters[si].months[mi].weeks[wi].days[di].items;
       else if(wi!==undefined && wi!=='') arr=g.quarters[si].months[mi].weeks[wi].items;
       else if(mi!==undefined && mi!=='') arr=g.quarters[si].months[mi].items;
       else arr=g.quarters[si].items;
       arr[idx].done=el.checked;
       persist();
       const row=el.closest('.item-row'); row.classList.toggle('done',el.checked);
+    };
+  });
+
+  document.querySelectorAll('[data-add-task]').forEach(el=>{
+    el.onclick=()=>{
+      const si=el.dataset.si, mi=el.dataset.mi, wi=el.dataset.wi, di=el.dataset.di;
+      const cell=el.closest('.goal-block');
+      const input=cell.querySelector('[data-newtask-input]');
+      const select=cell.querySelector('[data-newtask-quad]');
+      const title=input.value.trim();
+      if(!title) return;
+      addExtra(si,mi,wi,di,title,select.value);
+      persist();
+      render();
+    };
+  });
+  document.querySelectorAll('[data-remove-extra]').forEach(el=>{
+    el.onclick=()=>{
+      const si=el.dataset.si, mi=el.dataset.mi, wi=el.dataset.wi, di=el.dataset.di;
+      const k=dayKey(si,mi,wi,di);
+      state.dailyExtras[k]=(state.dailyExtras[k]||[]).filter(x=>x.id!==el.dataset.removeExtra);
+      persist();
+      render();
     };
   });
 
