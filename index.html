@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>چرخ سال — برنامه‌ریز اهداف</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#11172c;
+    --bg2:#0c1120;
+    --panel:#1a2340;
+    --panel2:#212c4d;
+    --line:#2c3860;
+    --gold:#e3a542;
+    --spring:#7fb069;
+    --summer:#e3a542;
+    --autumn:#c1502e;
+    --winter:#5f87b8;
+    --text:#f3efe4;
+    --muted:#93a0c2;
+    --muted2:#5f6c92;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(ellipse at 50% -10%, #1a2650 0%, var(--bg) 45%, var(--bg2) 100%);
+    color:var(--text);
+    font-family:'Vazirmatn',sans-serif;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  .wrap{max-width:880px;margin:0 auto;}
+  .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:10px;}
+  .brand h1{font-size:22px;font-weight:800;margin:0;letter-spacing:.5px;display:flex;align-items:center;gap:10px;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold);}
+  .brand .today{font-size:12px;color:var(--muted);}
+  .btn{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    padding:10px 18px;border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;
+    cursor:pointer;transition:.15s;
+  }
+  .btn:hover{border-color:var(--gold);}
+  .btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  .btn.primary{background:linear-gradient(135deg,var(--gold),#c78327);color:#1a1206;border:none;}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.ghost{background:transparent;border:1px solid var(--line);}
+  .btn.small{padding:6px 12px;font-size:12.5px;border-radius:9px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px;}
+  .muted{color:var(--muted);font-size:13.5px;line-height:2;}
+  .hint{color:var(--muted2);font-size:12px;}
+  input[type=text],input[type=number],textarea{
+    width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--text);
+    padding:11px 13px;border-radius:10px;font-family:inherit;font-size:14px;margin-top:6px;
+  }
+  input:focus,textarea:focus{outline:2px solid var(--gold);border-color:var(--gold);}
+  textarea{resize:vertical;min-height:70px;}
+  label{font-size:13.5px;color:var(--muted);font-weight:600;}
+  .field{margin-bottom:16px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .goal-chip{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;
+  }
+  .goal-chip .x{cursor:pointer;color:var(--muted2);font-size:18px;line-height:1;}
+  .goal-chip .x:hover{color:var(--autumn);}
+  .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;}
+  .status-realistic{background:#7fb06933;color:#a8d68a;}
+  .status-risky{background:#e3a54233;color:#f0c479;}
+  .status-unrealistic{background:#c1502e33;color:#e79378;}
+  .empty{text-align:center;padding:50px 20px;}
+  .empty .icon{font-size:38px;margin-bottom:14px;opacity:.8;}
+  h2{font-size:18px;font-weight:800;margin:0 0 6px;}
+  h3{font-size:15px;font-weight:700;margin:0 0 10px;}
+  .crumbs{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-bottom:18px;flex-wrap:wrap;}
+  .crumbs a{color:var(--muted);cursor:pointer;text-decoration:none;}
+  .crumbs a:hover{color:var(--gold);}
+  .crumbs .sep{opacity:.4;}
+  .wheel-box{display:flex;justify-content:center;margin:6px 0 22px;}
+  .season-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;}
+  @media(max-width:520px){.season-grid{grid-template-columns:1fr;}}
+  .season-card{
+    border-radius:16px;padding:16px;cursor:pointer;border:1px solid var(--line);
+    background:var(--panel2);transition:.15s;position:relative;overflow:hidden;
+  }
+  .season-card:hover{transform:translateY(-2px);border-color:var(--sc);}
+  .season-card .bar{position:absolute;inset-inline-start:0;top:0;bottom:0;width:5px;background:var(--sc);}
+  .season-card .name{font-weight:800;font-size:16px;margin-bottom:4px;}
+  .season-card .months{font-size:12px;color:var(--muted);}
+  .month-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+  @media(max-width:520px){.month-grid{grid-template-columns:1fr;}}
+  .month-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:.15s;}
+  .month-card:hover{border-color:var(--gold);}
+  .month-card .mname{font-weight:700;font-size:14.5px;margin-bottom:4px;}
+  .week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:14px;}
+  .week-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;text-align:center;transition:.15s;}
+  .week-card:hover{border-color:var(--gold);}
+  .item-row{display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line);}
+  .item-row:last-child{border-bottom:none;}
+  .item-row input[type=checkbox]{margin-top:3px;width:17px;height:17px;accent-color:var(--gold);cursor:pointer;flex-shrink:0;}
+  .item-row .t{font-size:14px;line-height:1.6;}
+  .item-row.done .t{text-decoration:line-through;color:var(--muted2);}
+  .goal-block{margin-bottom:20px;}
+  .goal-block .gtitle{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px;}
+  .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-left:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-line{color:var(--muted);font-size:13.5px;display:flex;align-items:center;padding:20px 0;}
+  .update-box{border-top:1px dashed var(--line);margin-top:18px;padding-top:16px;}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--gold);
+    padding:10px 20px;border-radius:12px;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:50;}
+  .stepper{font-size:12px;color:var(--muted);margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+/* ---------------- Jalali <-> Gregorian conversion (public algorithm) ---------------- */
+function jdiv(a,b){return ~~(a/b);}
+function jmod(a,b){return a-~~(a/b)*b;}
+function jalCal(jy){
+  var breaks=[-61,9,38,199,426,686,756,818,1111,1181,1210,1635,2060,2097,2192,2262,2324,2394,2456,3178];
+  var bl=breaks.length, gy=jy+621, leapJ=-14, jp=breaks[0], jm,jump,leap,n,i;
+  for(i=1;i<bl;i++){ jm=breaks[i]; jump=jm-jp; if(jy<jm) break;
+    leapJ=leapJ+jdiv(jump,33)*8+jdiv(jmod(jump,33),4); jp=jm; }
+  n=jy-jp;
+  leapJ=leapJ+jdiv(n,33)*8+jdiv(jmod(n,33)+3,4);
+  if(jmod(jump,33)===4 && jump-n===4) leapJ+=1;
+  var leapG=jdiv(gy,4)-jdiv((jdiv(gy,100)+1)*3,4)-150;
+  var march=20+leapJ-leapG;
+  if(jump-n<6) n=n-jump+jdiv(jump,33)*33;
+  leap=jmod(jmod(n+1,33)-1,4);
+  if(leap===-1) leap=4;
+  return {leap:leap,gy:gy,march:march};
+}
+function g2d(gy,gm,gd){
+  var d=jdiv((gy+jdiv(gm-8,6)+100100)*1461,4)+jdiv(153*jmod(gm+9,12)+2,5)+gd-34840408;
+  d=d-jdiv(jdiv(gy+100100+jdiv(gm-8,6),100)*3,4)+752;
+  return d;
+}
+function d2g(jdn){
+  var j=4*jdn+139361631;
+  j=j+jdiv(jdiv(4*jdn+183187720,146097)*3,4)*4-3908;
+  var i=jdiv(jmod(j,1461),4)*5+308;
+  var gd=jdiv(jmod(i,153),5)+1;
+  var gm=jmod(jdiv(i,153),12)+1;
+  var gy=jdiv(j,1461)-100100+jdiv(8-gm,6);
+  return {gy:gy,gm:gm,gd:gd};
+}
+function j2d(jy,jm,jd){ var r=jalCal(jy); return g2d(r.gy,3,r.march)+(jm-1)*31-jdiv(jm,7)*(jm-7)+jd-1; }
+function d2j(jdn){
+  var gy=d2g(jdn).gy, jy=gy-621, r=jalCal(jy), jdn1f=g2d(gy,3,r.march);
+  var jd,jm,k=jdn-jdn1f;
+  if(k>=0){ if(k<=185){ jm=1+jdiv(k,31); jd=jmod(k,31)+1; return {jy:jy,jm:jm,jd:jd}; } else k-=186; }
+  else { jy-=1; k+=179; if(r.leap===1) k+=1; }
+  jm=7+jdiv(k,30); jd=jmod(k,30)+1;
+  return {jy:jy,jm:jm,jd:jd};
+}
+function toJalaali(gy,gm,gd){ return d2j(g2d(gy,gm,gd)); }
+function isLeapJalaaliYear(jy){ return jalCal(jy).leap===1; }
+function jalaaliMonthLength(jy,jm){
+  if(jm<=6) return 31;
+  if(jm<=11) return 30;
+  return isLeapJalaaliYear(jy)?30:29;
+}
+
+const MONTH_NAMES=["فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"];
+const DAY_NAMES=["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه"];
+const SEASONS=[
+  {key:'spring',name:'بهار',color:'var(--spring)',months:[0,1,2]},
+  {key:'summer',name:'تابستان',color:'var(--summer)',months:[3,4,5]},
+  {key:'autumn',name:'پاییز',color:'var(--autumn)',months:[6,7,8]},
+  {key:'winter',name:'زمستان',color:'var(--winter)',months:[9,10,11]}
+];
+
+const today=new Date();
+const jToday=toJalaali(today.getFullYear(),today.getMonth()+1,today.getDate());
+
+/* ---------------- State ---------------- */
+let state={ year: jToday.jy, goals: [] };
+let view={ mode:'loading', wizardIdx:0, seasonIdx:null, monthIdx:null, weekIdx:null, editingGoalId:null };
+let saveTimer=null;
+
+function uid(){ return 'g'+Math.random().toString(36).slice(2,9); }
+
+function emptyQuarters(){
+  return SEASONS.map(s=>({
+    season:s.name, theme:'', items:[], generated:false,
+    months: s.months.map(mi=>({
+      idx:mi, name:MONTH_NAMES[mi], items:[], generated:false,
+      weeks: []
+    }))
+  }));
+}
+
+async function loadState(){
+  try{
+    const raw=localStorage.getItem('planner-state');
+    if(raw){ state=JSON.parse(raw); }
+  }catch(e){ /* no saved state yet */ }
+  view.mode = (state.goals.length===0) ? 'empty' : 'dashboard';
+  render();
+}
+function persist(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{ localStorage.setItem('planner-state', JSON.stringify(state)); }
+    catch(e){ console.error('save failed', e); }
+  }, 250);
+}
+
+/* ---------------- Claude API helper ---------------- */
+function sanitizeJsonText(str){
+  let out='';
+  let inString=false;
+  let escape=false;
+  for(let i=0;i<str.length;i++){
+    const ch=str[i];
+    if(inString){
+      if(escape){ out+=ch; escape=false; continue; }
+      if(ch==='\\'){ out+=ch; escape=true; continue; }
+      if(ch==='"'){ inString=false; out+=ch; continue; }
+      if(ch==='\n'){ out+='\\n'; continue; }
+      if(ch==='\r'){ continue; }
+      if(ch==='\t'){ out+='\\t'; continue; }
+      out+=ch;
+    }else{
+      if(ch==='"'){ inString=true; out+=ch; continue; }
+      out+=ch;
+    }
+  }
+  return out;
+}
+
+/* ---------------- AI proxy config ----------------
+   این اپ حالا به‌جای هوش مصنوعی داخلی کلود، به یک واسط (Worker) که خودت
+   می‌سازی وصل می‌شه. آدرس Worker خودت رو اینجا جایگزین کن.
+   راهنمای کامل ساخت Worker توی فایل «راهنمای-انتشار.md» هست.
+*/
+const PROXY_URL = "https://charkhesal-proxy.arash-aigpt.workers.dev";
+
+async function askClaude(system,user){
+  const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
+  let lastErr=null;
+  for(let attempt=0; attempt<2; attempt++){
+    let res;
+    try{
+      res=await fetch(PROXY_URL,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ system: fullSystem, user: user })
+      });
+    }catch(networkErr){ lastErr=new Error('ارتباط با سرور برقرار نشد.'); continue; }
+    let data;
+    try{ data=await res.json(); }catch(e){ lastErr=new Error('پاسخ سرور قابل خواندن نبود.'); continue; }
+    if(data && data.error){ lastErr=new Error(data.error || 'خطای سرور'); continue; }
+    const text=(data && data.text) ? data.text : '';
+    if(!text){ lastErr=new Error('پاسخ خالی از سرور دریافت شد.'); continue; }
+    let clean=text.replace(/```json|```/g,'').trim();
+    const s=clean.indexOf('{'), e=clean.lastIndexOf('}');
+    if(s===-1||e===-1){ lastErr=new Error('قالب پاسخ نامعتبر بود.'); continue; }
+    clean=clean.slice(s,e+1);
+    clean=sanitizeJsonText(clean);
+    clean=clean.replace(/,(\s*[\]}])/g,'$1');
+    try{ return JSON.parse(clean); }
+    catch(parseErr){ lastErr=parseErr; continue; }
+  }
+  throw lastErr || new Error('خطای نامشخص');
+}
+
+function changeLogText(goal){
+  if(!goal.changeLog || goal.changeLog.length===0) return 'بدون تغییر ثبت‌شده.';
+  return goal.changeLog.slice(-4).map(c=>'- '+c.note).join('\n');
+}
+function answersText(goal){
+  return (goal.questions||[]).map(q=>'- '+q.text+': '+(goal.answers[q.id]||'—')).join('\n');
+}
+
+/* ---------------- Wizard: questions ---------------- */
+async function generateQuestionsFor(goal){
+  const sys=`شما یک مربی برنامه‌ریزی دقیق هستید. کاربر یک هدف سالانه به فارسی نوشته. باید ۳ تا ۵ سوال کوتاه فارسی بپرس تا بفهمی هدف واقع‌بینانه هست یا نه و بتوانی برنامه بسازی. برای هدف‌های جسمانی مثل کاهش وزن حتماً وزن فعلی، قد و وضعیت سلامتی و مهلت زمانی را بپرس. برای هدف‌های مالی حتماً درآمد/سرمایه فعلی، مهارت‌ها، منابع در دسترس و زمان قابل صرف را بپرس. فرمت خروجی:
+{"questions":[{"id":"q1","text":"...","type":"text"}]}`;
+  const out=await askClaude(sys, `هدف کاربر: «${goal.title}»`);
+  goal.questions=out.questions||[];
+  goal.answers={};
+}
+
+async function analyzeAndPlan(goal){
+  const sys=`شما یک مشاور برنامه‌ریزی واقع‌بین و صادق هستید، نه صرفاً تشویق‌کننده. با توجه به هدف سالانه و پاسخ‌های کاربر، واقع‌بینانه بودن هدف را بسنج (مثلاً کاهش وزن سالم حداکثر حدود ۰.۵ تا ۱ کیلوگرم در هفته است و باید با شرایط سلامتی کاربر همخوانی داشته باشد؛ رشد درآمد چند میلیون دلاری در یک سال بدون سرمایه، تیم یا سابقهٔ مرتبط بسیار بعید است). سپس یک نقشه راه سالانه در ۴ فصل بساز که با شرایط واقعی کاربر سازگار باشد. پاسخ باید کوتاه و فشرده باشد. خروجی فقط JSON با این فرمت دقیق:
+{
+ "status":"realistic|risky|unrealistic",
+ "note":"یک جملهٔ کوتاه فارسی",
+ "adjustedGoal":"در صورت غیرواقعی یا پرریسک بودن، جایگزین کوتاه (حداکثر ۱۲ کلمه)؛ وگرنه رشته خالی",
+ "yearMilestones":[{"title":"..."}],
+ "quarters":[
+   {"season":"بهار","theme":"کوتاه","items":[{"title":"..."}]},
+   {"season":"تابستان","theme":"کوتاه","items":[{"title":"..."}]},
+   {"season":"پاییز","theme":"کوتاه","items":[{"title":"..."}]},
+   {"season":"زمستان","theme":"کوتاه","items":[{"title":"..."}]}
+ ]
+}
+حداکثر ۳ نقطه عطف سالانه (هرکدام حداکثر ۶ کلمه). برای هر فصل حداکثر ۲ آیتم (هرکدام حداکثر ۶ کلمه) و موضوع فصل حداکثر ۴ کلمه. کل خروجی باید خیلی مختصر باشد.`;
+  const user=`هدف: «${goal.title}»\nپاسخ‌های کاربر:\n${answersText(goal)}`;
+  const out=await askClaude(sys,user);
+  goal.feasibility={status:out.status,note:out.note,adjustedGoal:out.adjustedGoal||''};
+  goal.yearMilestones=out.yearMilestones||[];
+  const q=emptyQuarters();
+  (out.quarters||[]).forEach((qq,i)=>{ if(q[i]){ q[i].theme=qq.theme||''; q[i].items=(qq.items||[]).map(it=>({title:it.title,done:false})); q[i].generated=true; } });
+  goal.quarters=q;
+  goal.status='planned';
+}
+
+async function generateMonthsFor(goal, seasonIdx){
+  const quarter=goal.quarters[seasonIdx];
+  const sys=`شما یک برنامه‌ریز هستید. با توجه به هدف کاربر و آیتم‌های یک فصل خاص، آن را بین ۳ ماه آن فصل تقسیم کن.
+${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
+خروجی فقط JSON:
+{"months":[{"items":[{"title":"..."}]},{"items":[{"title":"..."}]},{"items":[{"title":"..."}]}]}
+حداکثر ۳ آیتم کوتاه (حداکثر ۸ کلمه) برای هر ماه، به ترتیب سه ماه فصل.`;
+  const user=`هدف: «${goal.title}»\nفصل: ${quarter.season} — موضوع: ${quarter.theme}\nآیتم‌های فصل:\n${quarter.items.map(i=>'- '+i.title).join('\n')}\nماه‌های این فصل: ${quarter.months.map(m=>m.name).join('، ')}`;
+  const out=await askClaude(sys,user);
+  (out.months||[]).forEach((mm,i)=>{
+    if(quarter.months[i]){
+      quarter.months[i].items=(mm.items||[]).map(it=>({title:it.title,done:false}));
+      quarter.months[i].generated=true;
+      quarter.months[i].weeks=[];
+    }
+  });
+}
+
+async function generateWeeksFor(goal, seasonIdx, monthIdx){
+  const month=goal.quarters[seasonIdx].months[monthIdx];
+  const len=jalaaliMonthLength(state.year, month.idx+1);
+  const weekCount=Math.ceil(len/7);
+  const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک ماه خاص را بین ${weekCount} هفتهٔ آن ماه تقسیم کن.
+${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
+خروجی فقط JSON: {"weeks":[{"items":[{"title":"..."}]}, ...تعداد=${weekCount}]}
+حداکثر ۲ آیتم بسیار کوتاه (حداکثر ۸ کلمه) برای هر هفته.`;
+  const user=`هدف: «${goal.title}»\nماه: ${month.name}\nآیتم‌های ماه:\n${month.items.map(i=>'- '+i.title).join('\n')}`;
+  const out=await askClaude(sys,user);
+  month.weeks=(out.weeks||[]).slice(0,weekCount).map((w,i)=>({label:'هفته '+(i+1),items:(w.items||[]).map(it=>({title:it.title,done:false})),days:[],daysGenerated:false}));
+  while(month.weeks.length<weekCount) month.weeks.push({label:'هفته '+(month.weeks.length+1),items:[],days:[],daysGenerated:false});
+  month.weeksGenerated=true;
+}
+
+async function generateDaysFor(goal, seasonIdx, monthIdx, weekIdx){
+  const week=goal.quarters[seasonIdx].months[monthIdx].weeks[weekIdx];
+  const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک هفتهٔ خاص را بین ۷ روز آن هفته (شنبه تا جمعه، به همین ترتیب) تقسیم کن تا یک برنامهٔ روزانهٔ عملی به‌دست بیاد.
+${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
+خروجی فقط JSON: {"days":[{"items":[{"title":"..."}]}, ...دقیقاً ۷ مورد به ترتیب شنبه تا جمعه]}
+حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه) برای هر روز؛ اگر روزی کاری لازم نیست آرایهٔ آیتم‌هایش خالی باشد.`;
+  const user=`هدف: «${goal.title}»\n${week.label} — آیتم‌های هفته:\n${week.items.map(i=>'- '+i.title).join('\n')}`;
+  const out=await askClaude(sys,user);
+  week.days=(out.days||[]).slice(0,7).map((d,i)=>({name:DAY_NAMES[i],items:(d.items||[]).map(it=>({title:it.title,done:false}))}));
+  while(week.days.length<7) week.days.push({name:DAY_NAMES[week.days.length],items:[]});
+  week.daysGenerated=true;
+}
+
+async function replanScope(goal, level, note){
+  goal.changeLog=goal.changeLog||[];
+  goal.changeLog.push({note});
+  let target, contextTitle;
+  if(level.type==='quarter'){ target=goal.quarters[level.si]; contextTitle='آیتم‌های فصل '+target.season; }
+  if(level.type==='month'){ target=goal.quarters[level.si].months[level.mi]; contextTitle='آیتم‌های ماه '+target.name; }
+  if(level.type==='week'){ target=goal.quarters[level.si].months[level.mi].weeks[level.wi]; contextTitle='آیتم‌های '+target.label; }
+  const sys=`شما یک برنامه‌ریز هستید که باید بخشی از برنامه را بر اساس یک تغییر جدید به‌روزرسانی کنی. آیتم‌های فعلی و توضیح تغییر داده می‌شود. خروجی فقط JSON: {"items":[{"title":"..."}]} با حداکثر همان تعداد آیتم قبلی یا کمی بیشتر، کوتاه و عملی.`;
+  const user=`هدف کلی: «${goal.title}»\n${contextTitle} (وضعیت فعلی):\n${(target.items||[]).map(i=>'- '+i.title).join('\n')}\n\nتغییر جدید گزارش‌شده توسط کاربر: «${note}»`;
+  const out=await askClaude(sys,user);
+  target.items=(out.items||[]).map(it=>({title:it.title,done:false}));
+  if(level.type==='quarter'){ goal.quarters[level.si].months.forEach(m=>{m.generated=false;m.weeks=[];}); }
+  if(level.type==='month'){ goal.quarters[level.si].months[level.mi].weeks=[]; goal.quarters[level.si].months[level.mi].weeksGenerated=false; }
+  if(level.type==='week'){ target.days=[]; target.daysGenerated=false; }
+}
+
+/* ---------------- Rendering ---------------- */
+const app=document.getElementById('app');
+function render(){
+  let html='';
+  html+=brandHTML();
+  if(view.mode==='loading') html+=`<div class="loading-line"><span class="spinner"></span> در حال بارگذاری…</div>`;
+  else if(view.mode==='empty') html+=emptyHTML();
+  else if(view.mode==='wizard-goals') html+=wizardGoalsHTML();
+  else if(view.mode==='wizard-questions') html+=wizardQuestionsHTML();
+  else if(view.mode==='wizard-analyzing') html+=`<div class="card loading-line"><span class="spinner"></span> در حال بررسی واقع‌بینانه بودن هدف و ساخت نقشهٔ راه سالانه…</div>`;
+  else if(view.mode==='wizard-questions-error') html+=wizardErrorHTML('در دریافت سوال‌های این هدف مشکلی پیش اومد.', 'btnRetryQuestions');
+  else if(view.mode==='wizard-analyze-error') html+=wizardErrorHTML('در بررسی و ساخت نقشهٔ راه این هدف مشکلی پیش اومد.', 'btnRetryAnalyze');
+  else if(view.mode==='wizard-feasibility') html+=wizardFeasibilityHTML();
+  else if(view.mode==='wizard-edit-title') html+=wizardEditTitleHTML();
+  else if(view.mode==='dashboard') html+=dashboardHTML();
+  else if(view.mode==='quarter') html+=quarterHTML();
+  else if(view.mode==='month') html+=monthHTML();
+  else if(view.mode==='week') html+=weekHTML();
+  app.innerHTML=html;
+  bindEvents();
+}
+
+function brandHTML(){
+  return `<div class="brand">
+    <h1><span class="dot"></span> چرخ سال</h1>
+    <div class="today">امروز: ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy} &nbsp;·&nbsp; سال برنامه: ${state.year}</div>
+  </div>`;
+}
+
+function emptyHTML(){
+  return `<div class="card empty">
+    <div class="icon">✶</div>
+    <h2>هدف‌های سالانه‌ات رو بگو تا برات کامل برنامه‌ریزی کنم</h2>
+    <p class="muted">هر هدف رو که وارد کنی، چند سوال دقیق ازت می‌پرسم (مثلاً وزن فعلی، امکانات، زمان در دسترس) تا برنامه‌ای واقع‌بینانه و قابل‌اجرا برات از سال تا روز بسازم.</p>
+    <button class="btn primary" id="btnStart">شروع برنامه‌ریزی</button>
+  </div>`;
+}
+
+let draftGoals=[];
+function wizardGoalsHTML(){
+  return `<div class="card">
+    <h2>هدف‌های سالانه‌ات چیه؟</h2>
+    <p class="muted">می‌تونی چند هدف اضافه کنی؛ برای هرکدوم جدا سوال می‌پرسم.</p>
+    <div class="field">
+      <input type="text" id="goalInput" placeholder="مثلاً: ۲۰ کیلوگرم وزن کم کنم">
+    </div>
+    <button class="btn ghost small" id="btnAddGoal">افزودن هدف</button>
+    <div style="margin-top:16px;">
+      ${draftGoals.map((g,i)=>`<div class="goal-chip"><span>${g}</span><span class="x" data-i="${i}">×</span></div>`).join('')}
+    </div>
+    ${draftGoals.length? `<button class="btn primary" id="btnNext" style="margin-top:10px;">ادامه و پرسیدن سوالات</button>`:''}
+  </div>`;
+}
+
+function wizardQuestionsHTML(){
+  const goal=state.goals[view.wizardIdx];
+  return `<div class="card">
+    <div class="stepper">هدف ${view.wizardIdx+1} از ${state.goals.length}</div>
+    <h2>«${goal.title}»</h2>
+    <p class="muted">برای اینکه برنامه‌ای واقع‌بینانه بسازم، لطفاً به این سوال‌ها جواب بده:</p>
+    ${goal.questions.map(q=>`
+      <div class="field">
+        <label>${q.text}</label>
+        <input type="${q.type==='number'?'number':'text'}" data-qid="${q.id}" class="qans" value="${goal.answers[q.id]||''}">
+      </div>`).join('')}
+    <button class="btn primary" id="btnSubmitAnswers">تحلیل و ساخت برنامه</button>
+  </div>`;
+}
+
+function wizardErrorHTML(msg,btnId){
+  return `<div class="card">
+    <p class="muted">${msg}</p>
+    <button class="btn primary small" id="${btnId}">تلاش دوباره</button>
+  </div>`;
+}
+function wizardFeasibilityHTML(){
+  const goal=state.goals[view.wizardIdx];
+  const f=goal.feasibility;
+  const badgeClass=f.status==='realistic'?'status-realistic':(f.status==='risky'?'status-risky':'status-unrealistic');
+  const badgeText=f.status==='realistic'?'واقع‌بینانه':(f.status==='risky'?'محتاط باش':'غیرواقعی');
+  return `<div class="card">
+    <div class="stepper">هدف ${view.wizardIdx+1} از ${state.goals.length}</div>
+    <h2>«${goal.title}»</h2>
+    <span class="status-badge ${badgeClass}">${badgeText}</span>
+    <p class="muted" style="margin-top:12px;">${f.note}</p>
+    ${f.adjustedGoal? `<div class="card" style="background:var(--bg2);margin-top:10px;"><b style="font-size:13.5px;">پیشنهاد جایگزین:</b><p class="muted" style="margin:6px 0 0;">${f.adjustedGoal}</p></div>`:''}
+    <h3 style="margin-top:18px;">نقاط عطف سال</h3>
+    ${goal.yearMilestones.map(m=>`<div class="item-row"><span class="t">◆ ${m.title}</span></div>`).join('')}
+    <div class="row" style="margin-top:18px;">
+      <button class="btn primary" id="btnAcceptPlan">تایید و ادامه</button>
+    </div>
+  </div>`;
+}
+
+function wizardEditTitleHTML(){
+  const goal=state.goals[view.wizardIdx];
+  return `<div class="card">
+    <h2>ویرایش هدف</h2>
+    <div class="field">
+      <label>عنوان هدف</label>
+      <input type="text" id="editTitleInput" value="${goal.title}">
+    </div>
+    <p class="hint">می‌تونی جواب سوال‌های قبلی رو هم توی مرحله‌ی بعد تغییر بدی. با ادامه دادن، برنامهٔ این هدف از نو ساخته می‌شه و تیک‌های زده‌شدهٔ قبلی‌اش پاک می‌شن.</p>
+    <div class="row" style="margin-top:12px;">
+      <button class="btn primary" id="btnEditContinue">ادامه</button>
+      <button class="btn ghost" id="btnEditCancel">انصراف</button>
+    </div>
+  </div>`;
+}
+
+function seasonColor(i){ return SEASONS[i].color; }
+
+function dashboardHTML(){
+  const size=280, cx=size/2, cy=size/2, rOuter=125, rInner=68;
+  function arcPath(startDeg,endDeg,r1,r2){
+    const toXY=(deg,r)=>{const rad=(deg-90)*Math.PI/180; return [cx+r*Math.cos(rad), cy+r*Math.sin(rad)];};
+    const [x1,y1]=toXY(startDeg,r2), [x2,y2]=toXY(endDeg,r2), [x3,y3]=toXY(endDeg,r1), [x4,y4]=toXY(startDeg,r1);
+    const large=endDeg-startDeg>180?1:0;
+    return `M${x1},${y1} A${r2},${r2} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${r1},${r1} 0 ${large} 0 ${x4},${y4} Z`;
+  }
+  let wheel=`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+  SEASONS.forEach((s,i)=>{
+    wheel+=`<path d="${arcPath(i*90,i*90+90,rInner,rOuter)}" fill="${s.color}" fill-opacity="${i===view.hoverSeason?0.95:0.75}" stroke="var(--bg)" stroke-width="3" data-season="${i}" style="cursor:pointer"/>`;
+  });
+  wheel+=`<circle cx="${cx}" cy="${cy}" r="${rInner-6}" fill="var(--panel)" stroke="var(--line)"/>`;
+  wheel+=`<text x="${cx}" y="${cy-4}" text-anchor="middle" fill="var(--gold)" font-size="20" font-weight="800" font-family="Vazirmatn">${state.year}</text>`;
+  wheel+=`<text x="${cx}" y="${cy+16}" text-anchor="middle" fill="var(--muted)" font-size="11" font-family="Vazirmatn">سال شمسی</text>`;
+  wheel+=`</svg>`;
+
+  const seasonCards=SEASONS.map((s,i)=>`
+    <div class="season-card" style="--sc:${s.color}" data-open-season="${i}">
+      <div class="bar"></div>
+      <div class="name">${s.name}</div>
+      <div class="months">${s.months.map(m=>MONTH_NAMES[m]).join(' · ')}</div>
+    </div>`).join('');
+
+  const goalsList=state.goals.map(g=>`
+    <div class="goal-chip">
+      <span>${g.title}</span>
+      <span class="row" style="gap:14px;align-items:center;">
+        <span class="hint" style="cursor:pointer;text-decoration:underline;" data-edit-goal="${g.id}">ویرایش</span>
+        <span class="x" data-remove-goal="${g.id}" title="حذف هدف">×</span>
+      </span>
+    </div>`).join('');
+
+  return `<div class="card">
+    <div class="wheel-box">${wheel}</div>
+    <div class="season-grid">${seasonCards}</div>
+  </div>
+  <div class="card">
+    <h3>هدف‌های این سال</h3>
+    ${goalsList || '<p class="muted">هنوز هدفی ثبت نشده.</p>'}
+    <button class="btn ghost small" id="btnAddMoreGoals" style="margin-top:8px;">افزودن هدف جدید</button>
+  </div>`;
+}
+
+function crumbs(parts){
+  return `<div class="crumbs">` + parts.map((p,i)=>{
+    const isLast=i===parts.length-1;
+    return (i>0?'<span class="sep">‹</span>':'') + (isLast? `<span>${p.label}</span>` : `<a data-crumb="${p.go}">${p.label}</a>`);
+  }).join('') + `</div>`;
+}
+
+function quarterHTML(){
+  const si=view.seasonIdx;
+  const s=SEASONS[si];
+  const blocks=state.goals.map(g=>{
+    const q=g.quarters[si];
+    if(!q.generated){
+      return `<div class="goal-block"><div class="gtitle">${g.title}</div><p class="hint">برنامهٔ این فصل هنوز ساخته نشده.</p><button class="btn ghost small" data-regen-goal="${g.id}">ساخت برنامه</button></div>`;
+    }
+    return `<div class="goal-block" data-goal="${g.id}">
+      <div class="gtitle">${g.title}${q.theme? ' — '+q.theme:''}</div>
+      ${q.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('')}
+    </div>`;
+  }).join('');
+
+  const months=state.goals.length? state.goals[0].quarters[si].months.map((m,mi)=>`
+    <div class="month-card" data-open-month="${mi}">
+      <div class="mname">${m.name}</div>
+      <div class="hint">مشاهده / ساخت برنامهٔ ماه</div>
+    </div>`).join(''):'';
+
+  return `${crumbs([{label:'سال',go:'dashboard'},{label:s.name}])}
+  <div class="card">
+    <h2 style="color:${s.color}">${s.name}</h2>
+    ${blocks}
+    <h3 style="margin-top:20px;">ماه‌ها</h3>
+    <div class="month-grid">${months}</div>
+    ${updateBoxHTML({type:'quarter',si})}
+  </div>`;
+}
+
+function monthHTML(){
+  const si=view.seasonIdx, mi=view.monthIdx;
+  const s=SEASONS[si];
+  let needsGen=false;
+  const monthName=state.goals.length? state.goals[0].quarters[si].months[mi].name : '';
+  const blocks=state.goals.map(g=>{
+    const m=g.quarters[si].months[mi];
+    if(m.error){
+      return `<div class="goal-block"><div class="gtitle">${g.title}</div><p class="hint">ساخت برنامهٔ ماه با خطا مواجه شد.</p><button class="btn ghost small" data-retry-month="${g.id}">تلاش دوباره</button></div>`;
+    }
+    if(!m.generated){ needsGen=true; return `<div class="goal-block"><div class="gtitle">${g.title}</div><div class="loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ ماه…</div></div>`; }
+    return `<div class="goal-block" data-goal="${g.id}">
+      <div class="gtitle">${g.title}</div>
+      ${m.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('')}
+    </div>`;
+  }).join('');
+
+  let weeksHTML='';
+  const allMonthsReady=state.goals.length>0 && state.goals.every(g=>g.quarters[si].months[mi].generated);
+  if(allMonthsReady){
+    const anyWeekError=state.goals.some(g=>g.quarters[si].months[mi].weekError);
+    const allWeeksReady=state.goals.every(g=>g.quarters[si].months[mi].weeksGenerated);
+    if(anyWeekError){
+      weeksHTML=`<div class="hint">ساخت هفته‌ها با خطا مواجه شد. <button class="btn ghost small" id="btnRetryWeeks">تلاش دوباره</button></div>`;
+    }else if(!allWeeksReady){
+      weeksHTML=`<div class="loading-line"><span class="spinner"></span> در حال ساخت هفته‌ها…</div>`;
+      triggerWeekGen(si,mi);
+    }else{
+      const weekCount=state.goals[0].quarters[si].months[mi].weeks.length;
+      weeksHTML=`<h3 style="margin-top:20px;">هفته‌ها</h3><div class="week-grid">`+
+        Array.from({length:weekCount}).map((_,wi)=>`<div class="week-card" data-open-week="${wi}">هفته ${wi+1}</div>`).join('')+`</div>`;
+    }
+  }
+
+  if(needsGen) triggerMonthGen(si,mi);
+
+  return `${crumbs([{label:'سال',go:'dashboard'},{label:s.name,go:'quarter'},{label:monthName}])}
+  <div class="card">
+    <h2 style="color:${s.color}">${monthName}</h2>
+    ${blocks}
+    ${weeksHTML}
+    ${updateBoxHTML({type:'month',si,mi})}
+  </div>`;
+}
+
+function weekHTML(){
+  const si=view.seasonIdx, mi=view.monthIdx, wi=view.weekIdx;
+  const s=SEASONS[si];
+  const monthName=state.goals.length? state.goals[0].quarters[si].months[mi].name:'';
+  const blocks=state.goals.map(g=>{
+    const w=g.quarters[si].months[mi].weeks[wi];
+    if(!w) return '';
+    return `<div class="goal-block" data-goal="${g.id}">
+      <div class="gtitle">${g.title}</div>
+      ${w.items.length? w.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('') : '<p class="hint">برای این هفته آیتم خاصی ثبت نشده.</p>'}
+    </div>`;
+  }).join('');
+
+  let daysHTML='';
+  const weeksExist=state.goals.length>0 && state.goals.every(g=>g.quarters[si].months[mi].weeks[wi]);
+  if(weeksExist){
+    const anyErr=state.goals.some(g=>g.quarters[si].months[mi].weeks[wi].dayError);
+    const allReady=state.goals.every(g=>g.quarters[si].months[mi].weeks[wi].daysGenerated);
+    if(anyErr){
+      daysHTML=`<div class="hint">ساخت برنامهٔ روزانه با خطا مواجه شد. <button class="btn ghost small" id="btnRetryDays">تلاش دوباره</button></div>`;
+    }else if(!allReady){
+      daysHTML=`<div class="loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ روزانه…</div>`;
+      triggerDayGen(si,mi,wi);
+    }else{
+      daysHTML=DAY_NAMES.map((dn,di)=>{
+        const rows=state.goals.map(g=>{
+          const dayItems=g.quarters[si].months[mi].weeks[wi].days[di].items;
+          return dayItems.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}${state.goals.length>1?` <span class="hint">— ${g.title}</span>`:''}</span></div>`).join('');
+        }).join('');
+        return `<div class="goal-block">
+          <div class="gtitle">${dn}</div>
+          ${rows || '<p class="hint">کاری برای این روز ثبت نشده.</p>'}
+        </div>`;
+      }).join('');
+    }
+  }
+
+  return `${crumbs([{label:'سال',go:'dashboard'},{label:s.name,go:'quarter'},{label:monthName,go:'month'},{label:'هفته '+(wi+1)}])}
+  <div class="card">
+    <h2 style="color:${s.color}">${monthName} — هفته ${wi+1}</h2>
+    ${blocks}
+    <h3 style="margin-top:20px;">برنامهٔ روزانه</h3>
+    ${daysHTML}
+    ${updateBoxHTML({type:'week',si,mi,wi})}
+  </div>`;
+}
+
+function updateBoxHTML(level){
+  return `<div class="update-box">
+    <h3>اگه برنامه تغییر کرد بگو تا خودم به‌روزش کنم</h3>
+    <textarea id="updateNote" placeholder="مثلاً: این هفته به‌خاطر بیماری نتونستم ورزش کنم / زودتر از موعد به هدف رسیدم…"></textarea>
+    <button class="btn primary small" id="btnUpdate" style="margin-top:8px;" data-level='${JSON.stringify(level)}'>به‌روزرسانی برنامه</button>
+  </div>`;
+}
+
+/* ---------------- Lazy generation triggers ---------------- */
+let genLock={};
+function triggerMonthGen(si,mi){
+  const key='m'+si+'_'+mi;
+  if(genLock[key]) return;
+  genLock[key]=true;
+  (async ()=>{
+    for(const g of state.goals){
+      const m=g.quarters[si].months[mi];
+      if(!m.generated && !m.error){
+        try{ await generateMonthsFor(g,si); }
+        catch(e){ console.error(e); m.error=true; }
+      }
+    }
+    persist(); render();
+    genLock[key]=false;
+  })();
+}
+function triggerWeekGen(si,mi){
+  const key='w'+si+'_'+mi;
+  if(genLock[key]) return;
+  genLock[key]=true;
+  (async ()=>{
+    for(const g of state.goals){
+      const m=g.quarters[si].months[mi];
+      if(!m.weeksGenerated && !m.weekError){
+        try{ await generateWeeksFor(g,si,mi); }
+        catch(e){ console.error(e); m.weekError=true; }
+      }
+    }
+    persist(); render();
+    genLock[key]=false;
+  })();
+}
+function triggerDayGen(si,mi,wi){
+  const key='d'+si+'_'+mi+'_'+wi;
+  if(genLock[key]) return;
+  genLock[key]=true;
+  (async ()=>{
+    for(const g of state.goals){
+      const w=g.quarters[si].months[mi].weeks[wi];
+      if(w && !w.daysGenerated && !w.dayError){
+        try{ await generateDaysFor(g,si,mi,wi); }
+        catch(e){ console.error(e); w.dayError=true; }
+      }
+    }
+    persist(); render();
+    genLock[key]=false;
+  })();
+}
+
+/* ---------------- Events ---------------- */
+function bindEvents(){
+  const $=id=>document.getElementById(id);
+
+  if($('btnStart')){ $('btnStart').onclick=()=>{ draftGoals=[]; view.mode='wizard-goals'; render(); }; }
+
+  if($('goalInput')){
+    $('goalInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addDraftGoal(); } });
+  }
+  if($('btnAddGoal')){ $('btnAddGoal').onclick=addDraftGoal; }
+  document.querySelectorAll('[data-i]').forEach(el=>{
+    el.onclick=()=>{ draftGoals.splice(+el.dataset.i,1); render(); };
+  });
+  if($('btnNext')){
+    $('btnNext').onclick=async ()=>{
+      const startIdx=state.goals.length;
+      draftGoals.forEach(t=>state.goals.push({
+        id:uid(), title:t, status:'draft', questions:[], answers:{},
+        feasibility:null, yearMilestones:[], quarters: emptyQuarters(), changeLog:[]
+      }));
+      draftGoals=[];
+      view.wizardIdx=startIdx;
+      await advanceWizardQuestions();
+    };
+  }
+
+  document.querySelectorAll('.qans').forEach(el=>{
+    el.onchange=()=>{ state.goals[view.wizardIdx].answers[el.dataset.qid]=el.value; };
+  });
+  if($('btnSubmitAnswers')){ $('btnSubmitAnswers').onclick=submitAnswers; }
+  if($('btnRetryQuestions')){ $('btnRetryQuestions').onclick=advanceWizardQuestions; }
+  if($('btnRetryAnalyze')){ $('btnRetryAnalyze').onclick=submitAnswers; }
+  if($('btnAcceptPlan')){
+    $('btnAcceptPlan').onclick=async ()=>{
+      view.wizardIdx++;
+      if(view.wizardIdx<state.goals.length && state.goals[view.wizardIdx].status==='draft'){
+        await advanceWizardQuestions();
+      } else {
+        view.mode='dashboard'; persist(); render();
+      }
+    };
+  }
+
+  if($('btnAddMoreGoals')){
+    $('btnAddMoreGoals').onclick=()=>{ draftGoals=[]; view.mode='wizard-goals'; render(); };
+  }
+  document.querySelectorAll('[data-regen-goal]').forEach(el=>{
+    el.onclick=async ()=>{
+      const g=state.goals.find(x=>x.id===el.dataset.regenGoal);
+      el.disabled=true; el.textContent='در حال ساخت…';
+      try{ await analyzeAndPlan(g); persist(); }
+      catch(e){ console.error(e); showToast('ساخت برنامه با خطا مواجه شد.'); }
+      render();
+    };
+  });
+  document.querySelectorAll('[data-retry-month]').forEach(el=>{
+    el.onclick=()=>{
+      const g=state.goals.find(x=>x.id===el.dataset.retryMonth);
+      g.quarters[view.seasonIdx].months[view.monthIdx].error=false;
+      render();
+    };
+  });
+  if($('btnRetryWeeks')){
+    $('btnRetryWeeks').onclick=()=>{
+      state.goals.forEach(g=>{ g.quarters[view.seasonIdx].months[view.monthIdx].weekError=false; });
+      render();
+    };
+  }
+  if($('btnRetryDays')){
+    $('btnRetryDays').onclick=()=>{
+      state.goals.forEach(g=>{ g.quarters[view.seasonIdx].months[view.monthIdx].weeks[view.weekIdx].dayError=false; });
+      render();
+    };
+  }
+  document.querySelectorAll('[data-remove-goal]').forEach(el=>{
+    el.onclick=()=>{
+      if(el.dataset.confirming==='1'){
+        state.goals=state.goals.filter(g=>g.id!==el.dataset.removeGoal);
+        persist();
+        if(state.goals.length===0) view.mode='empty';
+        render();
+      }else{
+        document.querySelectorAll('[data-remove-goal]').forEach(o=>{o.dataset.confirming='0';o.textContent='×';o.style.color='';});
+        el.dataset.confirming='1';
+        el.textContent='مطمئنی؟ ×';
+        el.style.color='var(--autumn)';
+        setTimeout(()=>{ if(el.isConnected && el.dataset.confirming==='1'){ el.dataset.confirming='0'; el.textContent='×'; el.style.color=''; } },3000);
+      }
+    };
+  });
+  document.querySelectorAll('[data-edit-goal]').forEach(el=>{
+    el.onclick=()=>{
+      const idx=state.goals.findIndex(g=>g.id===el.dataset.editGoal);
+      if(idx===-1) return;
+      view.wizardIdx=idx;
+      view.mode='wizard-edit-title';
+      render();
+    };
+  });
+  if($('btnEditContinue')){
+    $('btnEditContinue').onclick=()=>{
+      const v=document.getElementById('editTitleInput').value.trim();
+      if(v) state.goals[view.wizardIdx].title=v;
+      persist();
+      view.mode='wizard-questions'; render();
+    };
+  }
+  if($('btnEditCancel')){
+    $('btnEditCancel').onclick=()=>{ view.mode='dashboard'; render(); };
+  }
+
+  document.querySelectorAll('[data-season]').forEach(el=>{
+    el.onmouseenter=()=>{ view.hoverSeason=+el.dataset.season; render(); };
+  });
+  document.querySelectorAll('[data-open-season]').forEach(el=>{
+    el.onclick=()=>{ view.seasonIdx=+el.dataset.openSeason; view.mode='quarter'; render(); };
+  });
+  document.querySelectorAll('[data-open-month]').forEach(el=>{
+    el.onclick=()=>{ view.monthIdx=+el.dataset.openMonth; view.mode='month'; render(); };
+  });
+  document.querySelectorAll('[data-open-week]').forEach(el=>{
+    el.onclick=()=>{ view.weekIdx=+el.dataset.openWeek; view.mode='week'; render(); };
+  });
+  document.querySelectorAll('[data-crumb]').forEach(el=>{
+    el.onclick=()=>{ view.mode=el.dataset.crumb; render(); };
+  });
+
+  document.querySelectorAll('[data-item-toggle]').forEach(el=>{
+    el.onchange=()=>{
+      const g=state.goals.find(x=>x.id===el.dataset.goal);
+      const si=el.dataset.si, mi=el.dataset.mi, wi=el.dataset.wi, di=el.dataset.di, idx=+el.dataset.idx;
+      let arr;
+      if(di!==undefined && di!=='') arr=g.quarters[si].months[mi].weeks[wi].days[di].items;
+      else if(wi!==undefined && wi!=='') arr=g.quarters[si].months[mi].weeks[wi].items;
+      else if(mi!==undefined && mi!=='') arr=g.quarters[si].months[mi].items;
+      else arr=g.quarters[si].items;
+      arr[idx].done=el.checked;
+      persist();
+      const row=el.closest('.item-row'); row.classList.toggle('done',el.checked);
+    };
+  });
+
+  if($('btnUpdate')){
+    $('btnUpdate').onclick=async ()=>{
+      const note=$('updateNote').value.trim();
+      if(!note) return;
+      const level=JSON.parse($('btnUpdate').dataset.level);
+      $('btnUpdate').disabled=true;
+      $('btnUpdate').textContent='در حال به‌روزرسانی…';
+      for(const g of state.goals){ await replanScope(g, level, note).catch(()=>{}); }
+      persist();
+      showToast('برنامه به‌روزرسانی شد ✦');
+      render();
+    };
+  }
+}
+
+function addDraftGoal(){
+  const el=document.getElementById('goalInput');
+  const v=el.value.trim();
+  if(v){ draftGoals.push(v); el.value=''; render(); document.getElementById('goalInput').focus(); }
+}
+
+async function advanceWizardQuestions(){
+  view.mode='wizard-analyzing'; render();
+  try{
+    await generateQuestionsFor(state.goals[view.wizardIdx]);
+    persist();
+    view.mode='wizard-questions';
+  }catch(e){
+    console.error(e);
+    view.mode='wizard-questions-error';
+  }
+  render();
+}
+async function submitAnswers(){
+  view.mode='wizard-analyzing'; render();
+  try{
+    await analyzeAndPlan(state.goals[view.wizardIdx]);
+    persist();
+    view.mode='wizard-feasibility';
+  }catch(e){
+    console.error(e);
+    view.mode='wizard-analyze-error';
+  }
+  render();
+}
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2600);
+}
+
+loadState();
+</script>
+</body>
+</html>
