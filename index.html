@@ -29,7 +29,7 @@
     color:var(--text);
     font-family:'Vazirmatn',sans-serif;
     min-height:100vh;
-    padding:28px 16px 60px;
+    padding:28px 16px 90px;
   }
   .wrap{max-width:880px;margin:0 auto;}
   .brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:10px;}
@@ -128,7 +128,23 @@
   .is-today{box-shadow:0 0 0 2px var(--gold) inset;}
   .today-tag{display:inline-block;background:var(--gold);color:#1a1206;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;margin-inline-start:6px;}
   .past-tag{display:inline-block;color:var(--muted2);font-size:10px;font-weight:700;margin-inline-start:6px;}
+  .day-tabs{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:6px;}
+  .day-tab{flex:0 0 auto;padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:var(--panel2);font-size:12.5px;cursor:pointer;color:var(--muted);white-space:nowrap;}
+  .day-tab.active{background:var(--gold);color:#1a1206;border-color:var(--gold);font-weight:700;}
+  .day-tab.is-past{opacity:.45;}
+  .quick-add{width:100%;background:transparent;border:1px dashed var(--line);color:var(--muted);padding:7px 10px;border-radius:9px;font-family:inherit;font-size:12.5px;margin-top:8px;}
+  .quick-add:focus{border-style:solid;border-color:var(--gold);color:var(--text);}
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:40;padding-bottom:env(safe-area-inset-bottom);}
+  .nav-item{flex:1;text-align:center;padding:9px 2px 8px;cursor:pointer;color:var(--muted2);font-size:10.5px;}
+  .nav-item .ic{font-size:19px;display:block;margin-bottom:2px;}
+  .nav-item.active{color:var(--gold);}
+  .icon-btn{background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:2px 6px;}
+  .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:70;}
+  .drawer-panel{position:fixed;top:0;right:0;bottom:0;width:80%;max-width:300px;background:var(--panel);border-inline-start:1px solid var(--line);z-index:71;padding:20px;overflow-y:auto;}
+  .drawer-item{padding:14px 8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;}
+  .drawer-item:hover{color:var(--gold);}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div class="wrap" id="app"></div>
@@ -221,7 +237,7 @@ function isDayToday(monthAbsIdx,weekIdx,dayIdx){
   return (weekIdx*7+dayIdx+1)===jToday.jd;
 }
 function todayContextLine(){
-  return `امروز ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy} است. برنامه‌ریزی باید از همین امروز شروع بشه، نه از اول سال. برای هر بخشی (فصل/ماه/هفته/روز) که کاملاً قبل از امروز است، آرایهٔ items رو کاملاً خالی بگذار چون برنامه‌ریزی برای گذشته بی‌معناست؛ تمام تمرکز واقعی باید روی امروز و آینده باشد.`;
+  return `تاریخ شروع برنامه‌ریزی همین امروز است: ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy}. این برنامه یک برنامهٔ کامل سالانه از اول سال نیست؛ برنامه‌ریزی باید دقیقاً از همین امروز شروع بشه. برای هر بخشی (فصل/ماه/هفته/روز) که کاملاً قبل از امروز است، آرایهٔ items رو کاملاً خالی بگذار چون برنامه‌ریزی برای گذشته بی‌معناست؛ تمام تمرکز واقعی باید روی امروز و آینده باشد.`;
 }
 
 const QUADRANTS=[
@@ -252,11 +268,72 @@ function scoreOf(itemArrays){
   if(total===0) return null;
   return {done,total,pct:Math.round(done/total*100)};
 }
-function scoreBadgeHTML(itemArrays){
-  const s=scoreOf(itemArrays);
-  if(!s) return '';
-  const color = s.pct>=70? 'var(--spring)' : s.pct>=35? 'var(--summer)' : 'var(--autumn)';
-  return `<span class="score-badge" style="--sc:${color}">${s.pct}٪</span>`;
+function miniBadge(pct,icon){
+  const color = pct>=70? 'var(--spring)' : pct>=35? 'var(--summer)' : 'var(--autumn)';
+  return `<span class="score-badge" style="--sc:${color}">${icon} ${pct}٪</span>`;
+}
+function dualBadgeHTML(s){
+  let html='';
+  if(s.goal!==null) html+=miniBadge(s.goal,'🎯');
+  if(s.pers!==null) html+=miniBadge(s.pers,'✎');
+  return html;
+}
+function avgOf(vals){ return vals.length? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null; }
+
+/* All scoring above the day level is a derived average of the day level below it —
+   never independently checkable, so nothing above "day" can be faked. */
+function dayRawScore(si,mi,wi,di){
+  let goalDone=0,goalTotal=0,persDone=0,persTotal=0;
+  state.goals.forEach(g=>{
+    const q=g.quarters[si], m=q && q.months[mi], w=m && m.weeks[wi], day=w && w.days[di];
+    if(!day) return;
+    day.items.forEach(it=>{ goalTotal++; if(it.done) goalDone++; });
+  });
+  getExtras(si,mi,wi,di).forEach(ex=>{ persTotal++; if(ex.done) persDone++; });
+  return {
+    goal: goalTotal>0? Math.round(goalDone/goalTotal*100) : null,
+    pers: persTotal>0? Math.round(persDone/persTotal*100) : null
+  };
+}
+function weekScore(si,mi,wi){
+  const gVals=[],pVals=[];
+  for(let di=0; di<7; di++){
+    const r=dayRawScore(si,mi,wi,di);
+    if(r.goal!==null) gVals.push(r.goal);
+    if(r.pers!==null) pVals.push(r.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function monthScore(si,mi){
+  const weekCount=state.goals.length? state.goals[0].quarters[si].months[mi].weeks.length : 0;
+  const gVals=[],pVals=[];
+  for(let wi=0; wi<weekCount; wi++){
+    const s=weekScore(si,mi,wi);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function quarterScore(si){
+  const monthCount=state.goals.length? state.goals[0].quarters[si].months.length : 0;
+  const gVals=[],pVals=[];
+  for(let mi=0; mi<monthCount; mi++){
+    const s=monthScore(si,mi);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function yearScore(){
+  const gVals=[],pVals=[];
+  for(let si=0; si<4; si++){
+    const s=quarterScore(si);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  const ms=scoreOf(state.goals.map(g=>g.yearMilestones||[]));
+  if(ms) gVals.push(ms.pct);
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
 }
 
 function emptyQuarters(){
@@ -275,6 +352,7 @@ async function loadState(){
     if(raw){ state=JSON.parse(raw); }
   }catch(e){ /* no saved state yet */ }
   if(!state.dailyExtras) state.dailyExtras={};
+  runDailyCarryOver();
   view.mode = (state.goals.length===0) ? 'empty' : 'dashboard';
   render();
 }
@@ -284,6 +362,40 @@ function persist(){
     try{ localStorage.setItem('planner-state', JSON.stringify(state)); }
     catch(e){ console.error('save failed', e); }
   }, 250);
+}
+
+function runDailyCarryOver(){
+  const todayStr=jToday.jy+'-'+jToday.jm+'-'+jToday.jd;
+  if(state.lastCarryDate===todayStr){ return; }
+  const si=TODAY_SEASON_IDX, mi=TODAY_MONTH_ABS%3, wi=Math.floor((jToday.jd-1)/7), di=(jToday.jd-1)%7;
+  let prevWi=wi, prevDi=di-1;
+  if(prevDi<0){
+    if(wi===0){ state.lastCarryDate=todayStr; return; }
+    prevWi=wi-1; prevDi=6;
+  }
+  state.goals.forEach(g=>{
+    const q=g.quarters[si], m=q && q.months[mi];
+    if(!m) return;
+    const prevWeek=m.weeks[prevWi], todayWeek=m.weeks[wi];
+    if(!prevWeek || !todayWeek) return;
+    if(!prevWeek.days[prevDi] || !todayWeek.days[di]) return;
+    const prevDay=prevWeek.days[prevDi];
+    const keep=[], move=[];
+    prevDay.items.forEach(it=>{ if(it.done) keep.push(it); else { it.carried=true; move.push(it); } });
+    if(move.length){ prevDay.items=keep; todayWeek.days[di].items=todayWeek.days[di].items.concat(move); }
+  });
+  const prevKey=dayKey(si,mi,prevWi,prevDi), todayKeyStr=dayKey(si,mi,wi,di);
+  if(state.dailyExtras[prevKey] && state.dailyExtras[prevKey].length){
+    const keep=[], move=[];
+    state.dailyExtras[prevKey].forEach(ex=>{ if(ex.done) keep.push(ex); else { ex.carried=true; move.push(ex); } });
+    if(move.length){
+      state.dailyExtras[prevKey]=keep;
+      if(!state.dailyExtras[todayKeyStr]) state.dailyExtras[todayKeyStr]=[];
+      state.dailyExtras[todayKeyStr]=state.dailyExtras[todayKeyStr].concat(move);
+    }
+  }
+  state.lastCarryDate=todayStr;
+  persist();
 }
 
 /* ---------------- Claude API helper ---------------- */
@@ -315,6 +427,7 @@ function sanitizeJsonText(str){
    راهنمای کامل ساخت Worker توی فایل «راهنمای-انتشار.md» هست.
 */
 const PROXY_URL = "https://charkhesal-proxy.arash-aigpt.workers.dev";
+
 async function askClaude(system,user){
   const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
   let lastErr=null;
@@ -466,18 +579,75 @@ function render(){
   else if(view.mode==='wizard-analyze-error') html+=wizardErrorHTML('در بررسی و ساخت نقشهٔ راه این هدف مشکلی پیش اومد.', 'btnRetryAnalyze');
   else if(view.mode==='wizard-feasibility') html+=wizardFeasibilityHTML();
   else if(view.mode==='wizard-edit-title') html+=wizardEditTitleHTML();
+  else if(view.mode==='help') html+=helpHTML();
   else if(view.mode==='dashboard') html+=dashboardHTML();
   else if(view.mode==='quarter') html+=quarterHTML();
   else if(view.mode==='month') html+=monthHTML();
   else if(view.mode==='week') html+=weekHTML();
+  if(['dashboard','quarter','month','week','help'].includes(view.mode)) html+=bottomNavHTML();
+  if(view.drawerOpen) html+=drawerHTML();
   app.innerHTML=html;
   bindEvents();
 }
 
 function brandHTML(){
   return `<div class="brand">
+    <button class="icon-btn" id="btnMenu" aria-label="منو">☰</button>
     <h1><span class="dot"></span> چرخ سال</h1>
-    <div class="today">امروز: ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy} &nbsp;·&nbsp; سال برنامه: ${state.year}</div>
+    <div class="today">امروز: ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy}</div>
+  </div>`;
+}
+
+function bottomNavHTML(){
+  const items=[
+    {key:'dashboard', ic:'🗓️', label:'سال'},
+    {key:'quarter-today', ic:'🍂', label:'فصل'},
+    {key:'month-today', ic:'📅', label:'ماه'},
+    {key:'week-today', ic:'🗂️', label:'هفته'},
+    {key:'day-today', ic:'☀️', label:'روز'}
+  ];
+  const activeKey =
+    view.mode==='dashboard' ? 'dashboard' :
+    view.mode==='quarter' ? 'quarter-today' :
+    view.mode==='month' ? 'month-today' :
+    view.mode==='week' ? 'week-today' : '';
+  return `<div class="bottom-nav">
+    ${items.map(it=>`<div class="nav-item ${it.key===activeKey?'active':''}" data-nav="${it.key}"><span class="ic">${it.ic}</span>${it.label}</div>`).join('')}
+  </div>`;
+}
+
+function drawerHTML(){
+  return `<div class="drawer-overlay" id="drawerOverlay"></div>
+  <div class="drawer-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 style="margin:0;">منو</h3>
+      <span style="cursor:pointer;font-size:20px;" id="btnCloseDrawer">×</span>
+    </div>
+    <div class="card" style="padding:14px;margin-bottom:10px;">
+      <div style="font-weight:700;">کاربر مهمان</div>
+      <div class="hint">هنوز وارد نشدی</div>
+    </div>
+    <div class="drawer-item" id="btnDrawerLogin">ورود / ثبت‌نام</div>
+    <div class="drawer-item" id="btnUpgrade">✨ ارتقا به پرمیوم</div>
+    <div class="drawer-item" id="btnOpenHelp">راهنمای استفاده از اپ</div>
+  </div>`;
+}
+
+function helpHTML(){
+  return `<div class="card">
+    <h2>راهنمای استفاده از چرخ سال</h2>
+    <h3 style="margin-top:16px;">۱. هدف‌گذاری</h3>
+    <p class="muted">هر هدف سالانه رو وارد می‌کنی، چند سوال دقیق ازت پرسیده می‌شه (مثلاً وزن فعلی، امکانات، زمان در دسترس) تا مشخص بشه هدف واقع‌بینانه هست یا نه، بعد یه نقشهٔ راه از سال تا روز ساخته می‌شه.</p>
+    <h3 style="margin-top:16px;">۲. لایه‌های برنامه</h3>
+    <p class="muted">برنامه به‌صورت سال ← فصل ← ماه ← هفته ← روز شکسته می‌شه. سطح‌های بالاتر (فصل/ماه/هفته) فقط توضیح کلی و جهت‌گیری‌ان؛ کاری که واقعاً روی نمره تاثیر داره، فقط همون تسک‌های روزانه‌ست.</p>
+    <h3 style="margin-top:16px;">۳. ماتریس آیزنهاور</h3>
+    <p class="muted">برنامهٔ هر روز توی ۴ بخش نشون داده می‌شه: فوری‌ومهم، مهم‌غیرفوری، فوری‌غیرمهم، و نه‌فوری‌نه‌مهم. روی هر بخش می‌تونی مستقیم تسک خودت رو هم اضافه کنی — نیازی نیست حتماً به یه هدف مرتبط باشه.</p>
+    <h3 style="margin-top:16px;">۴. نمره‌دهی</h3>
+    <p class="muted">هر روز دو نمره داره: 🎯 نمرهٔ تسک‌های مرتبط با اهداف، و ✎ نمرهٔ تسک‌های شخصی‌ای که خودت اضافه کردی. نمرهٔ هفته، ماه، فصل و سال همیشه به‌صورت خودکار از میانگین روزهای زیرش محاسبه می‌شه — یعنی جایی برای تقلب یا تیک‌زدن الکی نیست.</p>
+    <h3 style="margin-top:16px;">۵. تسک‌های انجام‌نشده</h3>
+    <p class="muted">هر تسکی که توی یه روز انجام نشه، خودکار به برنامهٔ روز بعد منتقل می‌شه (با علامت ⏪) تا فراموش نشه.</p>
+    <h3 style="margin-top:16px;">۶. تغییرات</h3>
+    <p class="muted">اگه شرایط عوض شد، پایین هر فصل/ماه/هفته یه جعبهٔ «تغییر» هست — بنویس چی تغییر کرده تا برنامه از همون‌جا به بعد خودش رو با شرایط جدید تطبیق بده.</p>
   </div>`;
 }
 
@@ -582,13 +752,14 @@ function dashboardHTML(){
   wheel+=`</svg>`;
 
   const seasonCards=SEASONS.map((s,i)=>{
-    const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[i].items));
+    const badge=dualBadgeHTML(quarterScore(i));
     const past=isSeasonPast(i), curr=isSeasonToday(i);
     return `
     <div class="season-card ${past?'is-past':''} ${curr?'is-today':''}" style="--sc:${s.color}" data-open-season="${i}">
       <div class="bar"></div>
-      <div class="name">${s.name}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>
+      <div class="name">${s.name}${curr?'<span class="today-tag">اکنون</span>':''}</div>
       <div class="months">${s.months.map(m=>MONTH_NAMES[m]).join(' · ')}</div>
+      <div style="margin-top:6px;">${badge}</div>
     </div>`;
   }).join('');
 
@@ -601,7 +772,7 @@ function dashboardHTML(){
       </span>
     </div>`).join('');
 
-  const yearScoreBadge=scoreBadgeHTML(state.goals.map(g=>g.yearMilestones||[]));
+  const yearScoreBadge=dualBadgeHTML(yearScore());
   const milestonesHTML=state.goals.filter(g=>g.yearMilestones && g.yearMilestones.length).map(g=>`
     <div class="goal-block">
       <div class="gtitle">${g.title}</div>
@@ -609,6 +780,7 @@ function dashboardHTML(){
     </div>`).join('');
 
   return `<div class="card">
+    <p class="hint" style="text-align:center;margin-bottom:10px;">برنامه‌ریزی از همین امروز شروع می‌شه — ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy}</p>
     <div class="wheel-box">${wheel}</div>
     <div class="row" style="justify-content:center;margin-bottom:6px;">
       <button class="btn primary small" id="btnGoToday">برو به امروز</button>
@@ -620,6 +792,7 @@ function dashboardHTML(){
     <h3>هدف‌های این سال</h3>
     ${goalsList || '<p class="muted">هنوز هدفی ثبت نشده.</p>'}
     <button class="btn ghost small" id="btnAddMoreGoals" style="margin-top:8px;">افزودن هدف جدید</button>
+    <button class="btn ghost small" id="btnOpenHelp2" style="margin-top:8px;">راهنمای استفاده از اپ</button>
   </div>`;
 }
 
@@ -640,17 +813,17 @@ function quarterHTML(){
     }
     return `<div class="goal-block" data-goal="${g.id}">
       <div class="gtitle">${g.title}${q.theme? ' — '+q.theme:''}</div>
-      ${q.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('')}
+      ${q.items.map(it=>`<div class="item-row"><span class="t">◆ ${it.title}</span></div>`).join('')}
     </div>`;
   }).join('');
 
   const months=state.goals.length? state.goals[0].quarters[si].months.map((m,mi)=>{
-    const ready=state.goals.every(g=>g.quarters[si].months[mi].generated);
-    const badge=ready? scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].items)) : '';
+    const badge=dualBadgeHTML(monthScore(si,mi));
     const past=isMonthPast(m.idx), curr=isMonthToday(m.idx);
     return `
     <div class="month-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-month="${mi}">
-      <div class="mname">${m.name}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>
+      <div class="mname">${m.name}${curr?'<span class="today-tag">اکنون</span>':''}</div>
+      <div style="margin-top:4px;">${badge}</div>
       <div class="hint">مشاهده / ساخت برنامهٔ ماه</div>
     </div>`;
   }).join(''):'';
@@ -678,7 +851,7 @@ function monthHTML(){
     if(!m.generated){ needsGen=true; return `<div class="goal-block"><div class="gtitle">${g.title}</div><div class="loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ ماه…</div></div>`; }
     return `<div class="goal-block" data-goal="${g.id}">
       <div class="gtitle">${g.title}</div>
-      ${m.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('')}
+      ${m.items.map(it=>`<div class="item-row"><span class="t">◆ ${it.title}</span></div>`).join('')}
     </div>`;
   }).join('');
 
@@ -697,9 +870,9 @@ function monthHTML(){
       const monthAbs=state.goals[0].quarters[si].months[mi].idx;
       weeksHTML=`<h3 style="margin-top:20px;">هفته‌ها</h3><div class="week-grid">`+
         Array.from({length:weekCount}).map((_,wi)=>{
-          const badge=scoreBadgeHTML(state.goals.map(g=>g.quarters[si].months[mi].weeks[wi].items));
+          const badge=dualBadgeHTML(weekScore(si,mi,wi));
           const past=isWeekPast(monthAbs,wi), curr=isWeekCurrent(monthAbs,wi);
-          return `<div class="week-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-week="${wi}">هفته ${wi+1}${badge}${curr?'<span class="today-tag">اکنون</span>':''}</div>`;
+          return `<div class="week-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-week="${wi}">هفته ${wi+1}${curr?'<span class="today-tag">اکنون</span>':''}<div style="margin-top:4px;">${badge}</div></div>`;
         }).join('')+`</div>`;
     }
   }
@@ -723,18 +896,19 @@ function dayEisenGridHTML(si,mi,wi,di){
     day.items.forEach((it,idx)=>{
       entries.push({
         title: it.title + (state.goals.length>1? ` — ${g.title}`:''),
-        done: it.done, quadrant: it.quadrant||'q2', removable:false,
+        done: it.done, quadrant: it.quadrant||'q2', removable:false, carried: !!it.carried,
         attrs:`data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}" data-idx="${idx}"`
       });
     });
   });
   getExtras(si,mi,wi,di).forEach(ex=>{
     entries.push({
-      title: ex.title, done: ex.done, quadrant: ex.quadrant||'q2', removable:true, extraId: ex.id,
+      title: ex.title, done: ex.done, quadrant: ex.quadrant||'q2', removable:true, extraId: ex.id, carried: !!ex.carried,
       attrs:`data-item-toggle data-extra="${ex.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}"`
     });
   });
-  const score=scoreBadgeHTML([entries]);
+  const dayScore=dayRawScore(si,mi,wi,di);
+  const badge=dualBadgeHTML(dayScore);
   const monthAbs=state.goals.length? state.goals[0].quarters[si].months[mi].idx : null;
   const past=monthAbs!==null && isDayPast(monthAbs,wi,di);
   const curr=monthAbs!==null && isDayToday(monthAbs,wi,di);
@@ -742,44 +916,49 @@ function dayEisenGridHTML(si,mi,wi,di){
     const rows=entries.filter(e=>e.quadrant===q.key).map(e=>`
       <div class="item-row ${e.done?'done':''}">
         <input type="checkbox" ${e.attrs} ${e.done?'checked':''}>
-        <span class="t">${e.title}</span>
+        <span class="t">${e.carried?'<span class="hint">⏪ </span>':''}${e.title}</span>
         ${e.removable? `<span class="del-x" data-remove-extra="${e.extraId}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">×</span>`:''}
       </div>`).join('');
     return `<div class="eisen-cell" style="--qc:${q.color}">
       <div class="qh">${q.label}</div>
       <div class="qs">${q.sub}</div>
       ${rows || '<p class="hint">کاری نیست.</p>'}
+      <input type="text" class="quick-add" placeholder="+ افزودن کار…" data-quick-add data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}" data-quad="${q.key}">
     </div>`;
   }).join('');
   return `<div class="goal-block ${past?'is-past':''} ${curr?'is-today':''}">
-    <div class="gtitle">${DAY_NAMES[di]}${score}${curr?'<span class="today-tag">امروز</span>':''}</div>
+    <div class="gtitle">${DAY_NAMES[di]}${curr?'<span class="today-tag">امروز</span>':''}<div style="margin-top:4px;display:inline-block;">${badge}</div></div>
     <div class="eisen-grid">${grid}</div>
-    <div class="add-task-row">
-      <input type="text" placeholder="کار جدید…" data-newtask-input data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">
-      <select data-newtask-quad>
-        ${QUADRANTS.map(q=>`<option value="${q.key}">${q.label}</option>`).join('')}
-      </select>
-      <button class="btn ghost small" data-add-task data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-di="${di}">افزودن</button>
-    </div>
   </div>`;
 }
 
 function weekHTML(){
   const si=view.seasonIdx, mi=view.monthIdx, wi=view.weekIdx;
   const s=SEASONS[si];
-  const monthName=state.goals.length? state.goals[0].quarters[si].months[mi].name:'';
+
+  const monthsReady=state.goals.length>0 && state.goals.every(g=>g.quarters[si].months[mi] && g.quarters[si].months[mi].generated);
+  if(!monthsReady){
+    triggerMonthGen(si,mi);
+    return `${crumbs([{label:'سال',go:'dashboard'},{label:s.name,go:'quarter'}])}
+    <div class="card loading-line"><span class="spinner"></span> در حال آماده‌سازی برنامهٔ ماه…</div>`;
+  }
+
+  const monthName=state.goals[0].quarters[si].months[mi].name;
   const blocks=state.goals.map(g=>{
     const w=g.quarters[si].months[mi].weeks[wi];
     if(!w) return '';
     return `<div class="goal-block" data-goal="${g.id}">
       <div class="gtitle">${g.title}</div>
-      ${w.items.length? w.items.map((it,idx)=>`<div class="item-row ${it.done?'done':''}"><input type="checkbox" data-item-toggle data-goal="${g.id}" data-si="${si}" data-mi="${mi}" data-wi="${wi}" data-idx="${idx}" ${it.done?'checked':''}><span class="t">${it.title}</span></div>`).join('') : '<p class="hint">برای این هفته آیتم خاصی ثبت نشده.</p>'}
+      ${w.items.length? w.items.map(it=>`<div class="item-row"><span class="t">◆ ${it.title}</span></div>`).join('') : '<p class="hint">برای این هفته آیتم خاصی ثبت نشده.</p>'}
     </div>`;
   }).join('');
 
   let daysHTML='';
-  const weeksExist=state.goals.length>0 && state.goals.every(g=>g.quarters[si].months[mi].weeks[wi]);
-  if(weeksExist){
+  const weeksExist=state.goals.every(g=>g.quarters[si].months[mi].weeks[wi]);
+  if(!weeksExist){
+    triggerWeekGen(si,mi);
+    daysHTML=`<div class="loading-line"><span class="spinner"></span> در حال آماده‌سازی هفته…</div>`;
+  }else{
     const anyErr=state.goals.some(g=>g.quarters[si].months[mi].weeks[wi].dayError);
     const allReady=state.goals.every(g=>g.quarters[si].months[mi].weeks[wi].daysGenerated);
     if(anyErr){
@@ -788,7 +967,15 @@ function weekHTML(){
       daysHTML=`<div class="loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ روزانه…</div>`;
       triggerDayGen(si,mi,wi);
     }else{
-      daysHTML=DAY_NAMES.map((dn,di)=>dayEisenGridHTML(si,mi,wi,di)).join('');
+      const monthAbs=state.goals[0].quarters[si].months[mi].idx;
+      if(view.selectedDayIdx===null || view.selectedDayIdx===undefined){
+        view.selectedDayIdx = isWeekCurrent(monthAbs,wi) ? Math.min(6,Math.max(0,jToday.jd-(wi*7+1))) : 0;
+      }
+      const tabs=DAY_NAMES.map((dn,di)=>{
+        const past=isDayPast(monthAbs,wi,di), curr=isDayToday(monthAbs,wi,di);
+        return `<div class="day-tab ${di===view.selectedDayIdx?'active':''} ${past?'is-past':''}" data-select-day="${di}">${dn}${curr?' ●':''}</div>`;
+      }).join('');
+      daysHTML=`<div class="day-tabs">${tabs}</div>` + dayEisenGridHTML(si,mi,wi,view.selectedDayIdx);
     }
   }
 
@@ -990,7 +1177,10 @@ function bindEvents(){
     el.onclick=()=>{ view.monthIdx=+el.dataset.openMonth; view.mode='month'; render(); };
   });
   document.querySelectorAll('[data-open-week]').forEach(el=>{
-    el.onclick=()=>{ view.weekIdx=+el.dataset.openWeek; view.mode='week'; render(); };
+    el.onclick=()=>{ view.weekIdx=+el.dataset.openWeek; view.selectedDayIdx=null; view.mode='week'; render(); };
+  });
+  document.querySelectorAll('[data-select-day]').forEach(el=>{
+    el.onclick=()=>{ view.selectedDayIdx=+el.dataset.selectDay; render(); };
   });
   document.querySelectorAll('[data-crumb]').forEach(el=>{
     el.onclick=()=>{ view.mode=el.dataset.crumb; render(); };
@@ -1004,31 +1194,26 @@ function bindEvents(){
         const ex=list.find(x=>x.id===el.dataset.extra);
         if(ex) ex.done=el.checked;
         persist();
-        const row=el.closest('.item-row'); row.classList.toggle('done',el.checked);
+        render();
         return;
       }
       const g=state.goals.find(x=>x.id===el.dataset.goal);
       let arr;
       if(el.dataset.year!==undefined && el.dataset.year!=='') arr=g.yearMilestones;
       else if(di!==undefined && di!=='') arr=g.quarters[si].months[mi].weeks[wi].days[di].items;
-      else if(wi!==undefined && wi!=='') arr=g.quarters[si].months[mi].weeks[wi].items;
-      else if(mi!==undefined && mi!=='') arr=g.quarters[si].months[mi].items;
-      else arr=g.quarters[si].items;
+      else arr=g.yearMilestones;
       arr[idx].done=el.checked;
       persist();
-      const row=el.closest('.item-row'); row.classList.toggle('done',el.checked);
+      render();
     };
   });
 
-  document.querySelectorAll('[data-add-task]').forEach(el=>{
-    el.onclick=()=>{
-      const si=el.dataset.si, mi=el.dataset.mi, wi=el.dataset.wi, di=el.dataset.di;
-      const cell=el.closest('.goal-block');
-      const input=cell.querySelector('[data-newtask-input]');
-      const select=cell.querySelector('[data-newtask-quad]');
-      const title=input.value.trim();
+  document.querySelectorAll('[data-quick-add]').forEach(el=>{
+    el.onkeydown=(e)=>{
+      if(e.key!=='Enter') return;
+      const title=el.value.trim();
       if(!title) return;
-      addExtra(si,mi,wi,di,title,select.value);
+      addExtra(el.dataset.si, el.dataset.mi, el.dataset.wi, el.dataset.di, title, el.dataset.quad);
       persist();
       render();
     };
@@ -1042,6 +1227,30 @@ function bindEvents(){
       render();
     };
   });
+
+  document.querySelectorAll('[data-nav]').forEach(el=>{
+    el.onclick=()=>{
+      const k=el.dataset.nav;
+      if(k==='dashboard'){ view.mode='dashboard'; }
+      else if(k==='quarter-today'){ view.seasonIdx=TODAY_SEASON_IDX; view.mode='quarter'; }
+      else if(k==='month-today'){ view.seasonIdx=TODAY_SEASON_IDX; view.monthIdx=TODAY_MONTH_ABS%3; view.mode='month'; }
+      else if(k==='week-today' || k==='day-today'){
+        view.seasonIdx=TODAY_SEASON_IDX; view.monthIdx=TODAY_MONTH_ABS%3;
+        view.weekIdx=Math.floor((jToday.jd-1)/7);
+        view.selectedDayIdx = k==='day-today' ? (jToday.jd-1)%7 : null;
+        view.mode='week';
+      }
+      render();
+    };
+  });
+
+  if($('btnMenu')){ $('btnMenu').onclick=()=>{ view.drawerOpen=true; render(); }; }
+  if($('btnCloseDrawer')){ $('btnCloseDrawer').onclick=()=>{ view.drawerOpen=false; render(); }; }
+  if($('drawerOverlay')){ $('drawerOverlay').onclick=()=>{ view.drawerOpen=false; render(); }; }
+  if($('btnOpenHelp')){ $('btnOpenHelp').onclick=()=>{ view.drawerOpen=false; view.mode='help'; render(); }; }
+  if($('btnOpenHelp2')){ $('btnOpenHelp2').onclick=()=>{ view.mode='help'; render(); }; }
+  if($('btnUpgrade')){ $('btnUpgrade').onclick=()=>{ view.drawerOpen=false; render(); showToast('نسخهٔ پرمیوم به‌زودی اضافه می‌شه ✨'); }; }
+  if($('btnDrawerLogin')){ $('btnDrawerLogin').onclick=()=>{ view.drawerOpen=false; render(); showToast('ورود/ثبت‌نام در فاز بعدی اضافه می‌شه'); }; }
 
   if($('btnUpdate')){
     $('btnUpdate').onclick=async ()=>{
