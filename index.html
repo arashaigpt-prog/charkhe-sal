@@ -287,6 +287,7 @@ function dayRawScore(si,mi,wi,di){
   };
 }
 function weekScore(si,mi,wi){
+  if(!isWeekPast(si,mi,wi)) return { goal:null, pers:null };
   const gVals=[],pVals=[];
   for(let di=0; di<7; di++){
     const r=dayRawScore(si,mi,wi,di);
@@ -296,6 +297,7 @@ function weekScore(si,mi,wi){
   return { goal:avgOf(gVals), pers:avgOf(pVals) };
 }
 function monthScore(si,mi){
+  if(!isMonthPast(si,mi)) return { goal:null, pers:null };
   const weekCount=state.goals.length? (state.goals[0].quarters[si].months[mi].weeks.length||Math.ceil(monthLen(si*3+mi)/7)) : Math.ceil(monthLen(si*3+mi)/7);
   const gVals=[],pVals=[];
   for(let wi=0; wi<weekCount; wi++){
@@ -306,6 +308,7 @@ function monthScore(si,mi){
   return { goal:avgOf(gVals), pers:avgOf(pVals) };
 }
 function quarterScore(si){
+  if(!isSeasonPast(si)) return { goal:null, pers:null };
   const gVals=[],pVals=[];
   for(let mi=0; mi<3; mi++){
     const s=monthScore(si,mi);
@@ -315,9 +318,56 @@ function quarterScore(si){
   return { goal:avgOf(gVals), pers:avgOf(pVals) };
 }
 function yearScore(){
+  if(daysSinceStart()<365) return { goal:null, pers:null };
   const gVals=[],pVals=[];
   for(let si=0; si<4; si++){
     const s=quarterScore(si);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  const ms=scoreOf(state.goals.map(g=>g.yearMilestones||[]));
+  if(ms) gVals.push(ms.pct);
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+/* "So far" versions — used only for in-progress periods, clearly labeled in the UI as provisional */
+function weekScoreSoFar(si,mi,wi){
+  const gVals=[],pVals=[];
+  for(let di=0; di<7; di++){
+    if(dayIndexOf(si,mi,wi,di)>daysSinceStart()) continue;
+    const r=dayRawScore(si,mi,wi,di);
+    if(r.goal!==null) gVals.push(r.goal);
+    if(r.pers!==null) pVals.push(r.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function monthScoreSoFar(si,mi){
+  const weekCount=state.goals.length? (state.goals[0].quarters[si].months[mi].weeks.length||Math.ceil(monthLen(si*3+mi)/7)) : Math.ceil(monthLen(si*3+mi)/7);
+  const gVals=[],pVals=[];
+  for(let wi=0; wi<weekCount; wi++){
+    const s = isWeekPast(si,mi,wi) ? weekScore(si,mi,wi) : weekScoreSoFar(si,mi,wi);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function quarterScoreSoFar(si){
+  const gVals=[],pVals=[];
+  for(let mi=0; mi<3; mi++){
+    const s = isMonthPast(si,mi) ? monthScore(si,mi) : monthScoreSoFar(si,mi);
+    if(s.goal!==null) gVals.push(s.goal);
+    if(s.pers!==null) pVals.push(s.pers);
+  }
+  return { goal:avgOf(gVals), pers:avgOf(pVals) };
+}
+function badgeForPeriod(pastFlag, pastScore, soFarScore){
+  if(pastFlag) return dualBadgeHTML(pastScore);
+  if(soFarScore.goal===null && soFarScore.pers===null) return '';
+  return dualBadgeHTML(soFarScore)+'<span class="hint" style="margin-inline-start:2px;">(تاکنون)</span>';
+}
+function yearScoreSoFar(){
+  const gVals=[],pVals=[];
+  for(let si=0; si<4; si++){
+    const s = isSeasonPast(si) ? quarterScore(si) : quarterScoreSoFar(si);
     if(s.goal!==null) gVals.push(s.goal);
     if(s.pers!==null) pVals.push(s.pers);
   }
@@ -529,7 +579,7 @@ async function generateDaysFor(goal, seasonIdx, monthIdx, weekIdx){
   const sys=`شما یک برنامه‌ریز هستید. آیتم‌های یک هفتهٔ خاص از برنامه را بین ۷ روز آن هفته تقسیم کن تا یک برنامهٔ روزانهٔ عملی به‌دست بیاید. هر آیتم را طبق ماتریس آیزنهاور دسته‌بندی کن: q1 = فوری و مهم، q2 = مهم ولی غیرفوری، q3 = فوری ولی غیرمهم، q4 = نه فوری نه مهم.
 ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده توسط کاربر را حتماً در نظر بگیر:\n'+changeLogText(goal):''}
 خروجی فقط JSON: {"days":[{"items":[{"title":"...","quadrant":"q1|q2|q3|q4"}]}, ...دقیقاً ۷ مورد]}
-حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه) برای هر روز؛ اگر روزی کاری لازم نیست آرایهٔ آیتم‌هایش خالی باشد.`;
+حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه). هر ۷ روز باید حداقل یک آیتم داشته باشند؛ هیچ روزی نباید آرایهٔ items خالی داشته باشد — حتی روزهای سبک‌تر باید حداقل یک کار کوچک مرتبط (مثلاً مرور، آماده‌سازی، یا استراحت فعال) داشته باشند.`;
   const user=`هدف: «${goal.title}»\n${week.label} — آیتم‌های هفته:\n${week.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
   week.days=(out.days||[]).slice(0,7).map((d)=>({items:(d.items||[]).map(it=>({title:it.title,done:false,quadrant:it.quadrant||'q2'}))}));
@@ -568,11 +618,12 @@ function render(){
   else if(view.mode==='wizard-feasibility') html+=wizardFeasibilityHTML();
   else if(view.mode==='wizard-edit-title') html+=wizardEditTitleHTML();
   else if(view.mode==='help') html+=helpHTML();
+  else if(view.mode==='roadmap') html+=roadmapHTML();
   else if(view.mode==='dashboard') html+=dashboardHTML();
   else if(view.mode==='quarter') html+=quarterHTML();
   else if(view.mode==='month') html+=monthHTML();
   else if(view.mode==='week') html+=weekHTML();
-  if(['dashboard','quarter','month','week','help'].includes(view.mode)) html+=bottomNavHTML();
+  if(['dashboard','quarter','month','week','help','roadmap'].includes(view.mode)) html+=bottomNavHTML();
   if(view.drawerOpen) html+=drawerHTML();
   app.innerHTML=html;
   bindEvents();
@@ -590,6 +641,7 @@ function brandHTML(){
 function bottomNavHTML(){
   const items=[
     {key:'dashboard', ic:'🗓️', label:'سال'},
+    {key:'roadmap', ic:'🧭', label:'نقشه‌راه'},
     {key:'quarter-today', ic:'🍂', label:'فصل'},
     {key:'month-today', ic:'📅', label:'ماه'},
     {key:'week-today', ic:'🗂️', label:'هفته'},
@@ -597,6 +649,7 @@ function bottomNavHTML(){
   ];
   const activeKey =
     view.mode==='dashboard' ? 'dashboard' :
+    view.mode==='roadmap' ? 'roadmap' :
     view.mode==='quarter' ? 'quarter-today' :
     view.mode==='month' ? 'month-today' :
     view.mode==='week' ? 'week-today' : '';
@@ -620,6 +673,38 @@ function drawerHTML(){
     <div class="drawer-item" id="btnUpgrade">✨ ارتقا به پرمیوم</div>
     <div class="drawer-item" id="btnOpenHelp">راهنمای استفاده از اپ</div>
   </div>`;
+}
+
+function roadmapHTML(){
+  if(state.goals.length===0){
+    return `<div class="card"><p class="muted">هنوز هدفی ثبت نشده؛ اول یه هدف اضافه کن تا نقشه‌راهش اینجا ساخته بشه.</p></div>`;
+  }
+  const blocks=state.goals.map(g=>{
+    const milestones=(g.yearMilestones||[]).map(m=>`<div class="item-row ${m.done?'done':''}"><span class="t">◆ ${m.title}</span></div>`).join('');
+    const quarters=g.quarters.map((q,si)=>{
+      const past=isSeasonPast(si), curr=isSeasonToday(si);
+      const r=quarterRange(si);
+      if(!goalActiveInQuarter(g,si)){
+        return `<div class="goal-block is-past"><div class="gtitle">${QUARTER_META[si].label} — روزهای ${r.start+1} تا ${r.end+1}</div><p class="hint">این هدف هنوز به این بازه نرسیده.</p></div>`;
+      }
+      if(!q.generated){
+        return `<div class="goal-block"><div class="gtitle">${QUARTER_META[si].label}</div><p class="hint">هنوز ساخته نشده.</p></div>`;
+      }
+      return `<div class="goal-block ${past?'is-past':''} ${curr?'is-today':''}">
+        <div class="gtitle" style="color:${QUARTER_META[si].color}">${QUARTER_META[si].label}${q.theme?' — '+q.theme:''}${curr?'<span class="today-tag">اکنون</span>':''}</div>
+        <div class="hint" style="margin-bottom:6px;">روزهای ${r.start+1} تا ${r.end+1}</div>
+        ${q.items.map(it=>`<div class="item-row"><span class="t">◆ ${it.title}</span></div>`).join('')}
+      </div>`;
+    }).join('');
+    return `<div class="card">
+      <h2>${g.title}</h2>
+      ${g.feasibility? `<p class="muted" style="margin-bottom:10px;">${g.feasibility.note}</p>`:''}
+      ${milestones? `<h3>نقاط عطف سال</h3>${milestones}`:''}
+      <h3 style="margin-top:16px;">مسیر چهار‌فصلی</h3>
+      ${quarters}
+    </div>`;
+  }).join('');
+  return `<div class="card"><p class="muted" style="text-align:center;">نقشه‌راه کامل هر هدف، از امروز (روز ${daysSinceStart()+1}) تا پایان برنامه.</p></div>${blocks}`;
 }
 
 function helpHTML(){
@@ -730,8 +815,8 @@ function dashboardHTML(){
   wheel+=`</svg>`;
 
   const seasonCards=QUARTER_META.map((qm,i)=>{
-    const badge=dualBadgeHTML(quarterScore(i));
     const past=isSeasonPast(i), curr=isSeasonToday(i);
+    const badge=badgeForPeriod(past, quarterScore(i), quarterScoreSoFar(i));
     const r=quarterRange(i);
     return `<div class="season-card ${past?'is-past':''} ${curr?'is-today':''}" style="--sc:${qm.color}" data-open-season="${i}">
       <div class="bar"></div>
@@ -750,7 +835,7 @@ function dashboardHTML(){
       </span>
     </div>`).join('');
 
-  const yearScoreBadge=dualBadgeHTML(yearScore());
+  const yearScoreBadge=badgeForPeriod(daysSinceStart()>=365, yearScore(), yearScoreSoFar());
   const milestonesHTML=state.goals.filter(g=>g.yearMilestones && g.yearMilestones.length).map(g=>`
     <div class="goal-block">
       <div class="gtitle">${g.title}</div>
@@ -797,8 +882,8 @@ function quarterHTML(){
   }).join('');
 
   const months=state.goals.length? [0,1,2].map(mi=>{
-    const badge=dualBadgeHTML(monthScore(si,mi));
     const past=isMonthPast(si,mi), curr=isMonthToday(si,mi);
+    const badge=badgeForPeriod(past, monthScore(si,mi), monthScoreSoFar(si,mi));
     return `<div class="month-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-month="${mi}">
       <div class="mname">${state.goals[0].quarters[si].months[mi].label}${curr?'<span class="today-tag">اکنون</span>':''}</div>
       <div style="margin-top:4px;">${badge}</div>
@@ -848,8 +933,8 @@ function monthHTML(){
       const weekCount=state.goals[0].quarters[si].months[mi].weeks.length;
       weeksHTML=`<h3 style="margin-top:20px;">هفته‌ها</h3><div class="week-grid">`+
         Array.from({length:weekCount}).map((_,wi)=>{
-          const badge=dualBadgeHTML(weekScore(si,mi,wi));
           const past=isWeekPast(si,mi,wi), curr=isWeekCurrent(si,mi,wi);
+          const badge=badgeForPeriod(past, weekScore(si,mi,wi), weekScoreSoFar(si,mi,wi));
           return `<div class="week-card ${past?'is-past':''} ${curr?'is-today':''}" data-open-week="${wi}">هفته ${wi+1}${curr?'<span class="today-tag">اکنون</span>':''}<div style="margin-top:4px;">${badge}</div></div>`;
         }).join('')+`</div>`;
     }
@@ -1186,6 +1271,7 @@ function bindEvents(){
       const c=coordsForDayIndex(daysSinceStart());
       if(!c){ return; }
       if(k==='dashboard'){ view.mode='dashboard'; }
+      else if(k==='roadmap'){ view.mode='roadmap'; }
       else if(k==='quarter-today'){ view.seasonIdx=c.si; view.mode='quarter'; }
       else if(k==='month-today'){ view.seasonIdx=c.si; view.monthIdx=c.mi; view.mode='month'; }
       else if(k==='week-today' || k==='day-today'){
