@@ -219,6 +219,18 @@ function goalActiveInMonth(g,si,mi){ return monthRange(si,mi).end>=(g.startDayIn
 function goalActiveInQuarter(g,si){ return quarterRange(si).end>=(g.startDayIndex||0); }
 function goalActiveOnDay(g,si,mi,wi,di){ return dayIndexOf(si,mi,wi,di)>=(g.startDayIndex||0); }
 
+function timeConflictWarning(){
+  if(!state.dailyHoursBudget) return null;
+  const activeGoals=state.goals.filter(g=>typeof g.weeklyHours==='number' && g.weeklyHours>0);
+  if(!activeGoals.length) return null;
+  const totalWeekly=activeGoals.reduce((sum,g)=>sum+g.weeklyHours,0);
+  const dailyNeeded=totalWeekly/7;
+  if(dailyNeeded>state.dailyHoursBudget){
+    return `مجموع زمانی که اهدافت لازم دارن حدود ${Math.round(dailyNeeded*10)/10} ساعت در روزه، ولی گفتی ${state.dailyHoursBudget} ساعت وقت آزاد داری. شاید لازم باشه بین اهدافت اولویت‌بندی کنی یا زمان بیشتری آزاد کنی.`;
+  }
+  return null;
+}
+
 const QUARTER_META=[
   {label:'فصل ۱',color:'var(--spring)'},
   {label:'فصل ۲',color:'var(--summer)'},
@@ -394,7 +406,7 @@ async function loadState(){
   if(!state.dailyExtras) state.dailyExtras={};
   if(!state.startDate) state.startDate={gy:today.getFullYear(),gm:today.getMonth()+1,gd:today.getDate()};
   runDailyCarryOver();
-  view.mode = (state.goals.length===0) ? 'empty' : 'dashboard';
+  view.mode = (state.goals.length===0) ? 'empty' : 'today';
   render();
 }
 function persist(){
@@ -617,13 +629,15 @@ function render(){
   else if(view.mode==='wizard-analyze-error') html+=wizardErrorHTML('در بررسی و ساخت نقشهٔ راه این هدف مشکلی پیش اومد.', 'btnRetryAnalyze');
   else if(view.mode==='wizard-feasibility') html+=wizardFeasibilityHTML();
   else if(view.mode==='wizard-edit-title') html+=wizardEditTitleHTML();
+  else if(view.mode==='setup-hours') html+=setupHoursHTML();
   else if(view.mode==='help') html+=helpHTML();
   else if(view.mode==='roadmap') html+=roadmapHTML();
+  else if(view.mode==='today') html+=todayHTML();
   else if(view.mode==='dashboard') html+=dashboardHTML();
   else if(view.mode==='quarter') html+=quarterHTML();
   else if(view.mode==='month') html+=monthHTML();
   else if(view.mode==='week') html+=weekHTML();
-  if(['dashboard','quarter','month','week','help','roadmap'].includes(view.mode)) html+=bottomNavHTML();
+  if(['today','dashboard','quarter','month','week','help','roadmap'].includes(view.mode)) html+=bottomNavHTML();
   if(view.drawerOpen) html+=drawerHTML();
   app.innerHTML=html;
   bindEvents();
@@ -638,16 +652,54 @@ function brandHTML(){
   </div>`;
 }
 
+function todayHTML(){
+  const c=coordsForDayIndex(daysSinceStart());
+  if(!c) return `<div class="card"><p class="muted">امروز خارج از بازهٔ ۳۶۵ روزهٔ برنامه‌ست.</p></div>`;
+  const {si,mi,wi,di}=c;
+
+  const monthsReady=state.goals.length>0 && state.goals.every(g=>g.quarters[si].months[mi] && g.quarters[si].months[mi].generated);
+  if(!monthsReady){ triggerMonthGen(si,mi); return `<div class="card loading-line"><span class="spinner"></span> در حال آماده‌سازی برنامهٔ امروز…</div>`; }
+  const weeksExist=state.goals.every(g=>g.quarters[si].months[mi].weeks[wi]);
+  if(!weeksExist){ triggerWeekGen(si,mi); return `<div class="card loading-line"><span class="spinner"></span> در حال آماده‌سازی برنامهٔ امروز…</div>`; }
+  const anyErr=state.goals.some(g=>g.quarters[si].months[mi].weeks[wi].dayError);
+  if(anyErr){ view.seasonIdx=si; view.monthIdx=mi; view.weekIdx=wi; return `<div class="card"><p class="hint">ساخت برنامهٔ امروز با خطا مواجه شد. <button class="btn ghost small" id="btnRetryDays">تلاش دوباره</button></p></div>`; }
+  const allReady=state.goals.every(g=>g.quarters[si].months[mi].weeks[wi].daysGenerated);
+  if(!allReady){ triggerDayGen(si,mi,wi); return `<div class="card loading-line"><span class="spinner"></span> در حال ساخت برنامهٔ امروز…</div>`; }
+
+  let goalCount=0, personalCount=0, urgentCount=0, importantCount=0;
+  state.goals.forEach(g=>{
+    if(!goalActiveOnDay(g,si,mi,wi,di)) return;
+    const day=g.quarters[si].months[mi].weeks[wi].days[di];
+    if(!day) return;
+    day.items.forEach(it=>{ goalCount++; if(it.quadrant==='q1') urgentCount++; if(it.quadrant==='q1'||it.quadrant==='q2') importantCount++; });
+  });
+  personalCount=getExtras(dayIndexOf(si,mi,wi,di)).length;
+  const warn=timeConflictWarning();
+
+  return `<div class="card">
+    <p class="hint" style="text-align:center;">${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy} · ${weekdayNameForDayIndex(dayIndexOf(si,mi,wi,di))}</p>
+    <div class="row" style="justify-content:center;gap:16px;margin:10px 0 4px;font-size:13px;">
+      <span>🎯 ${goalCount} کار هدف</span>
+      <span>📌 ${personalCount} کار شخصی</span>
+      <span>🔥 ${urgentCount} فوری</span>
+      <span>⭐ ${importantCount} مهم</span>
+    </div>
+    ${warn? `<p class="muted" style="background:var(--bg2);border:1px solid var(--autumn);border-radius:10px;padding:10px;margin-top:10px;">⚠️ ${warn}</p>`:''}
+  </div>
+  <div class="card">${dayEisenGridHTML(si,mi,wi,di)}</div>`;
+}
+
 function bottomNavHTML(){
   const items=[
-    {key:'dashboard', ic:'🗓️', label:'سال'},
+    {key:'today', ic:'☀️', label:'امروز'},
     {key:'roadmap', ic:'🧭', label:'نقشه‌راه'},
     {key:'quarter-today', ic:'🍂', label:'فصل'},
     {key:'month-today', ic:'📅', label:'ماه'},
     {key:'week-today', ic:'🗂️', label:'هفته'},
-    {key:'day-today', ic:'☀️', label:'روز'}
+    {key:'dashboard', ic:'🎡', label:'چرخ سال'}
   ];
   const activeKey =
+    view.mode==='today' ? 'today' :
     view.mode==='dashboard' ? 'dashboard' :
     view.mode==='roadmap' ? 'roadmap' :
     view.mode==='quarter' ? 'quarter-today' :
@@ -731,6 +783,15 @@ function emptyHTML(){
     <h2>هدف‌های سالانه‌ات رو بگو تا برات کامل برنامه‌ریزی کنم</h2>
     <p class="muted">هر هدف رو که وارد کنی، مثل یک مشاور متخصص در همون حوزه ازت سوال می‌پرسم تا برنامه‌ای دقیق و واقع‌بینانه از امروز تا یک سال آینده بسازم.</p>
     <button class="btn primary" id="btnStart">شروع برنامه‌ریزی</button>
+  </div>`;
+}
+
+function setupHoursHTML(){
+  return `<div class="card">
+    <h2>یه سوال قبل از شروع</h2>
+    <p class="muted">روزانه واقعاً چند ساعت وقت آزاد داری که بین همهٔ اهدافت و کارهای شخصیت تقسیم بشه؟ این کمک می‌کنه برنامه واقع‌بینانه بمونه و اگه اهدافت بیشتر از زمانت شدن، بهت هشدار بدم.</p>
+    <div class="field"><input type="number" id="hoursBudgetInput" placeholder="مثلاً 3" min="0" step="0.5"></div>
+    <button class="btn primary" id="btnSaveHoursBudget">ادامه</button>
   </div>`;
 }
 
@@ -844,6 +905,7 @@ function dashboardHTML(){
 
   return `<div class="card">
     <p class="hint" style="text-align:center;margin-bottom:10px;">برنامه از همین امروز شروع می‌شه — ${jToday.jd} ${MONTH_NAMES[jToday.jm-1]} ${jToday.jy}</p>
+    ${timeConflictWarning()? `<p class="muted" style="background:var(--bg2);border:1px solid var(--autumn);border-radius:10px;padding:10px;margin-bottom:10px;">⚠️ ${timeConflictWarning()}</p>`:''}
     <div class="wheel-box">${wheel}</div>
     <div class="row" style="justify-content:center;margin-bottom:6px;">
       <button class="btn primary small" id="btnGoToday">برو به امروز</button>
@@ -1115,7 +1177,20 @@ function triggerDayGen(si,mi,wi){
 function bindEvents(){
   const $=id=>document.getElementById(id);
 
-  if($('btnStart')){ $('btnStart').onclick=()=>{ draftGoals=[]; view.mode='wizard-goals'; render(); }; }
+  function goToGoalWizard(){ draftGoals=[]; view.mode='wizard-goals'; render(); }
+  function startPlanningFlow(){
+    if(!state.dailyHoursBudget){ view.mode='setup-hours'; render(); }
+    else{ goToGoalWizard(); }
+  }
+  if($('btnStart')){ $('btnStart').onclick=startPlanningFlow; }
+  if($('btnSaveHoursBudget')){
+    $('btnSaveHoursBudget').onclick=()=>{
+      const v=parseFloat(document.getElementById('hoursBudgetInput').value);
+      state.dailyHoursBudget = (v && v>0) ? v : 1;
+      persist();
+      goToGoalWizard();
+    };
+  }
   if($('goalInput')){ $('goalInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); addDraftGoal(); } }); }
   if($('btnAddGoal')){ $('btnAddGoal').onclick=addDraftGoal; }
   document.querySelectorAll('[data-i]').forEach(el=>{ el.onclick=()=>{ draftGoals.splice(+el.dataset.i,1); render(); }; });
@@ -1155,18 +1230,14 @@ function bindEvents(){
       if(view.wizardIdx<state.goals.length && state.goals[view.wizardIdx].status==='draft'){
         await startChat(state.goals[view.wizardIdx]);
       } else {
-        view.mode='dashboard'; persist(); render();
+        view.mode='today'; persist(); render();
       }
     };
   }
 
-  if($('btnAddMoreGoals')){ $('btnAddMoreGoals').onclick=()=>{ draftGoals=[]; view.mode='wizard-goals'; render(); }; }
+  if($('btnAddMoreGoals')){ $('btnAddMoreGoals').onclick=startPlanningFlow; }
   if($('btnGoToday')){
-    $('btnGoToday').onclick=()=>{
-      const c=coordsForDayIndex(daysSinceStart());
-      if(c){ view.seasonIdx=c.si; view.monthIdx=c.mi; view.mode='month'; }
-      render();
-    };
+    $('btnGoToday').onclick=()=>{ view.mode='today'; render(); };
   }
   if($('btnOpenHelp2')){ $('btnOpenHelp2').onclick=()=>{ view.mode='help'; render(); }; }
 
@@ -1270,13 +1341,14 @@ function bindEvents(){
       const k=el.dataset.nav;
       const c=coordsForDayIndex(daysSinceStart());
       if(!c){ return; }
-      if(k==='dashboard'){ view.mode='dashboard'; }
+      if(k==='today'){ view.mode='today'; }
+      else if(k==='dashboard'){ view.mode='dashboard'; }
       else if(k==='roadmap'){ view.mode='roadmap'; }
       else if(k==='quarter-today'){ view.seasonIdx=c.si; view.mode='quarter'; }
       else if(k==='month-today'){ view.seasonIdx=c.si; view.monthIdx=c.mi; view.mode='month'; }
-      else if(k==='week-today' || k==='day-today'){
+      else if(k==='week-today'){
         view.seasonIdx=c.si; view.monthIdx=c.mi; view.weekIdx=c.wi;
-        view.selectedDayIdx = k==='day-today' ? c.di : null;
+        view.selectedDayIdx = null;
         view.mode='week';
       }
       render();
@@ -1310,9 +1382,18 @@ function addDraftGoal(){
   if(v){ draftGoals.push(v); el.value=''; render(); document.getElementById('goalInput').focus(); }
 }
 
+const TIME_BUDGET_QUESTION='هفته‌ای واقعاً چند ساعت می‌تونی برای همین هدف مشخص وقت بذاری؟ (فقط عدد تقریبی بگو، مثلاً 5)';
+
 async function startChat(goal){
   goal.chat=goal.chat||[];
-  view.mode='wizard-chat'; view.chatBusy=true; render();
+  view.mode='wizard-chat';
+  if(goal.chat.length===0 && goal.weeklyHours===undefined){
+    goal.pendingQuestion=TIME_BUDGET_QUESTION;
+    view.chatBusy=false;
+    render();
+    return;
+  }
+  view.chatBusy=true; render();
   try{
     const out=await nextChatQuestion(goal);
     if(out.done || goal.chat.length>=30){ await finishChatAndPlan(goal); return; }
@@ -1325,8 +1406,13 @@ async function startChat(goal){
   render();
 }
 async function submitChatAnswer(goal, answer){
+  const wasTimeBudgetQuestion = goal.pendingQuestion===TIME_BUDGET_QUESTION;
   goal.chat.push({q:goal.pendingQuestion, a:answer});
   goal.pendingQuestion=null;
+  if(wasTimeBudgetQuestion){
+    const m=answer.match(/(\d+(\.\d+)?)/);
+    goal.weeklyHours = m? parseFloat(m[1]) : null;
+  }
   persist();
   view.chatBusy=true; render();
   if(goal.chat.length>=30){ await finishChatAndPlan(goal); return; }
