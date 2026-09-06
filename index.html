@@ -561,16 +561,17 @@ ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده تو
   const user=`هدف: «${goal.title}»\nموضوع بازه: ${quarter.theme}\nآیتم‌های بازه:\n${quarter.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
   (out.months||[]).forEach((mm,i)=>{
-    if(quarter.months[i]){
-      quarter.months[i].items=(mm.items||[]).map(it=>({title:it.title}));
-      quarter.months[i].generated=true;
-      quarter.months[i].weeks=[];
-    }
+    const m=quarter.months[i];
+    if(!m || m.generated) return; // never touch a month that already has content
+    m.items=(mm.items||[]).map(it=>({title:it.title}));
+    m.generated=true;
+    m.weeks=[];
   });
 }
 
 async function generateWeeksFor(goal, seasonIdx, monthIdx){
   const month=goal.quarters[seasonIdx].months[monthIdx];
+  if(month.weeksGenerated) return; // never touch a month whose weeks already exist
   const monthAbs=si_mi_to_abs(seasonIdx,monthIdx);
   const len=monthLen(monthAbs);
   const weekCount=Math.ceil(len/7);
@@ -594,8 +595,13 @@ ${goal.changeLog && goal.changeLog.length ? 'تغییرات ثبت‌شده تو
 حداکثر ۲ آیتم بسیار کوتاه و عملی (حداکثر ۶ کلمه). هر ۷ روز باید حداقل یک آیتم داشته باشند؛ هیچ روزی نباید آرایهٔ items خالی داشته باشد — حتی روزهای سبک‌تر باید حداقل یک کار کوچک مرتبط (مثلاً مرور، آماده‌سازی، یا استراحت فعال) داشته باشند.`;
   const user=`هدف: «${goal.title}»\n${week.label} — آیتم‌های هفته:\n${week.items.map(i=>'- '+i.title).join('\n')}`;
   const out=await askClaude(sys,user);
-  week.days=(out.days||[]).slice(0,7).map((d)=>({items:(d.items||[]).map(it=>({title:it.title,done:false,quadrant:it.quadrant||'q2'}))}));
-  while(week.days.length<7) week.days.push({items:[]});
+  const fresh=(out.days||[]).slice(0,7).map((d)=>({items:(d.items||[]).map(it=>({title:it.title,done:false,quadrant:it.quadrant||'q2'}))}));
+  while(fresh.length<7) fresh.push({items:[]});
+  const existing=week.days||[];
+  week.days=[0,1,2,3,4,5,6].map(di=>{
+    if(isDayPast(seasonIdx,monthIdx,weekIdx,di) && existing[di]) return existing[di]; // never touch an already-elapsed day
+    return fresh[di];
+  });
   week.daysGenerated=true;
 }
 
@@ -610,9 +616,20 @@ async function replanScope(goal, level, note){
   const user=`هدف کلی: «${goal.title}»\n${contextTitle} (وضعیت فعلی):\n${(target.items||[]).map(i=>'- '+i.title).join('\n')}\n\nتغییر جدید گزارش‌شده توسط کاربر: «${note}»`;
   const out=await askClaude(sys,user);
   target.items=(out.items||[]).map(it=>({title:it.title}));
-  if(level.type==='quarter'){ goal.quarters[level.si].months.forEach(m=>{m.generated=false;m.weeks=[];}); }
-  if(level.type==='month'){ goal.quarters[level.si].months[level.mi].weeks=[]; goal.quarters[level.si].months[level.mi].weeksGenerated=false; }
-  if(level.type==='week'){ target.days=[]; target.daysGenerated=false; }
+  if(level.type==='quarter'){
+    goal.quarters[level.si].months.forEach((m,mi)=>{
+      if(!isMonthPast(level.si,mi)) m.generated=false;
+    });
+  }
+  if(level.type==='month'){
+    const month=goal.quarters[level.si].months[level.mi];
+    (month.weeks||[]).forEach((w,wi)=>{
+      if(!isWeekPast(level.si,level.mi,wi)) w.daysGenerated=false;
+    });
+  }
+  if(level.type==='week'){
+    target.daysGenerated=false; // days array is kept; generateDaysFor preserves already-past days itself
+  }
 }
 
 /* ---------------- Rendering ---------------- */
