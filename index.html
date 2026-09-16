@@ -496,7 +496,7 @@ function extractFirstJsonObject(str){
 async function askClaude(system,user){
   const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. فقط یک آبجکت JSON بده، هیچ متن یا آبجکت دیگری قبل یا بعدش نباشه. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
   let lastErr=null;
-  for(let attempt=0; attempt<2; attempt++){
+  for(let attempt=0; attempt<3; attempt++){
     let res;
     try{
       res=await fetch(PROXY_URL,{
@@ -515,6 +515,7 @@ async function askClaude(system,user){
     if(!jsonSlice){ lastErr=new Error('قالب پاسخ نامعتبر بود.'); continue; }
     clean=sanitizeJsonText(jsonSlice);
     clean=clean.replace(/,(\s*[\]}])/g,'$1');
+    clean=clean.replace(/}\s*{/g,'},{').replace(/]\s*\[/g,'],[').replace(/"[ \t]*\n[ \t]*"/g,'","');
     try{ return JSON.parse(clean); }
     catch(parseErr){ lastErr=parseErr; continue; }
   }
