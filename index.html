@@ -474,8 +474,27 @@ function sanitizeJsonText(str){
   return out;
 }
 
+function extractFirstJsonObject(str){
+  const start=str.indexOf('{');
+  if(start===-1) return null;
+  let depth=0, inStr=false, esc=false;
+  for(let i=start;i<str.length;i++){
+    const ch=str[i];
+    if(inStr){
+      if(esc){ esc=false; continue; }
+      if(ch==='\\'){ esc=true; continue; }
+      if(ch==='"'){ inStr=false; }
+      continue;
+    }
+    if(ch==='"'){ inStr=true; continue; }
+    if(ch==='{'){ depth++; }
+    else if(ch==='}'){ depth--; if(depth===0){ return str.slice(start,i+1); } }
+  }
+  return null;
+}
+
 async function askClaude(system,user){
-  const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
+  const fullSystem = system + "\nخروجی را فقط و فقط یک JSON معتبر بده، بدون ``` و بدون هیچ توضیح قبل یا بعد از آن. هرگز از علامت نقل‌قول انگلیسی (\") داخل مقادیر متنی استفاده نکن؛ اگر لازم بود نقل‌قول بگذاری از « و » استفاده کن. هر مقدار رشته‌ای باید فقط در یک خط باشد و نباید داخلش خط جدید (Enter) باشد. بعد از آخرین عضو هر آرایه یا آبجکت هرگز کاما اضافه نگذار. فقط یک آبجکت JSON بده، هیچ متن یا آبجکت دیگری قبل یا بعدش نباشه. خیلی مختصر و کوتاه بنویس؛ از هیچ محدودیت طول ذکرشده تجاوز نکن تا پاسخ کامل و ناقطع بماند.";
   let lastErr=null;
   for(let attempt=0; attempt<2; attempt++){
     let res;
@@ -492,10 +511,9 @@ async function askClaude(system,user){
     const text=(data && data.text) ? data.text : '';
     if(!text){ lastErr=new Error('پاسخ خالی از سرور دریافت شد.'); continue; }
     let clean=text.replace(/```json|```/g,'').trim();
-    const s=clean.indexOf('{'), e=clean.lastIndexOf('}');
-    if(s===-1||e===-1){ lastErr=new Error('قالب پاسخ نامعتبر بود.'); continue; }
-    clean=clean.slice(s,e+1);
-    clean=sanitizeJsonText(clean);
+    const jsonSlice=extractFirstJsonObject(clean);
+    if(!jsonSlice){ lastErr=new Error('قالب پاسخ نامعتبر بود.'); continue; }
+    clean=sanitizeJsonText(jsonSlice);
     clean=clean.replace(/,(\s*[\]}])/g,'$1');
     try{ return JSON.parse(clean); }
     catch(parseErr){ lastErr=parseErr; continue; }
